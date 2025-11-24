@@ -1093,6 +1093,217 @@
                 width: 100%;
             }
         }
+
+        /* Movie Details Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border-radius: 12px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            border: 2px solid var(--accent-gold);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: var(--accent-red);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px var(--accent-red);
+        }
+
+        .modal-header {
+            position: relative;
+            height: 400px;
+            overflow: hidden;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .modal-backdrop {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: brightness(0.4);
+        }
+
+        .modal-poster {
+            position: absolute;
+            bottom: -50px;
+            left: 30px;
+            width: 200px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+            border: 4px solid var(--bg-card);
+            z-index: 5;
+        }
+
+        .modal-body {
+            padding: 70px 30px 30px 260px;
+            min-height: 150px;
+        }
+
+        .modal-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            color: var(--accent-gold);
+            margin-bottom: 15px;
+            line-height: 1.2;
+        }
+
+        .modal-meta {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+
+        .modal-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .modal-section {
+            margin-top: 30px;
+        }
+
+        .modal-section-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5rem;
+            color: var(--accent-gold);
+            margin-bottom: 15px;
+            letter-spacing: 0.1em;
+        }
+
+        .modal-overview {
+            line-height: 1.8;
+            color: var(--text-primary);
+            font-size: 1.05rem;
+        }
+
+        .trailer-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            height: 0;
+            overflow: hidden;
+            border-radius: 8px;
+            background: var(--bg-primary);
+        }
+
+        .trailer-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .cast-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 15px;
+        }
+
+        .cast-member {
+            text-align: center;
+        }
+
+        .cast-photo {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--accent-gold);
+            margin-bottom: 8px;
+        }
+
+        .cast-name {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            margin-bottom: 3px;
+        }
+
+        .cast-character {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .no-trailer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                max-height: 95vh;
+            }
+
+            .modal-header {
+                height: 250px;
+            }
+
+            .modal-poster {
+                width: 120px;
+                left: 20px;
+                bottom: -40px;
+            }
+
+            .modal-body {
+                padding: 50px 20px 20px 160px;
+            }
+
+            .modal-title {
+                font-size: 1.8rem;
+            }
+
+            .cast-grid {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            }
+
+            .cast-photo {
+                width: 80px;
+                height: 80px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1227,6 +1438,8 @@
             const [selectedDecade, setSelectedDecade] = useState('');
             const [selectedLanguage, setSelectedLanguage] = useState('');
             const [loading, setLoading] = useState(false);
+            const [selectedMovie, setSelectedMovie] = useState(null);
+            const [movieDetails, setMovieDetails] = useState(null);
 
             // Listen to Firebase in online mode
             useEffect(() => {
@@ -1247,6 +1460,32 @@
                     return () => sessionRef.off();
                 }
             }, [mode, screen, roomCode]);
+
+            const fetchMovieDetails = async (movieId) => {
+                try {
+                    // Fetch movie details including videos
+                    const response = await fetch(
+                        `${TMDB_BASE_URL}/movie/${movieId}?api_key=${TMDB_API_KEY}&append_to_response=videos,credits`
+                    );
+                    const data = await response.json();
+                    
+                    // Find YouTube trailer
+                    const trailer = data.videos?.results?.find(
+                        video => video.type === 'Trailer' && video.site === 'YouTube'
+                    ) || data.videos?.results?.find(
+                        video => video.site === 'YouTube'
+                    );
+                    
+                    return {
+                        ...data,
+                        trailer: trailer ? `https://www.youtube.com/embed/${trailer.key}` : null,
+                        cast: data.credits?.cast?.slice(0, 6) || []
+                    };
+                } catch (error) {
+                    console.error('Error fetching movie details:', error);
+                    return null;
+                }
+            };
 
             const fetchStreamingProviders = async (movieId) => {
                 try {
@@ -1632,6 +1871,17 @@
                 }
             };
 
+            const openMovieDetails = async (movie) => {
+                setSelectedMovie(movie);
+                const details = await fetchMovieDetails(movie.id);
+                setMovieDetails(details);
+            };
+
+            const closeMovieDetails = () => {
+                setSelectedMovie(null);
+                setMovieDetails(null);
+            };
+
             const getUserFavoriteCount = (userName) => {
                 if (mode === 'local') {
                     return Object.entries(localFavorites).filter(([id, users]) => users[userName]).length;
@@ -1809,7 +2059,136 @@
             }
 
             return (
-                <div className="app-container">
+                <>
+                    {/* Movie Details Modal */}
+                    {selectedMovie && (
+                        <div className="modal-overlay" onClick={closeMovieDetails}>
+                            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                                <button className="modal-close" onClick={closeMovieDetails}>×</button>
+                                
+                                <div className="modal-header">
+                                    {movieDetails?.backdrop_path && (
+                                        <img
+                                            src={`https://image.tmdb.org/t/p/original${movieDetails.backdrop_path}`}
+                                            alt={selectedMovie.title}
+                                            className="modal-backdrop"
+                                        />
+                                    )}
+                                    <img
+                                        src={selectedMovie.poster_path ? `${TMDB_IMAGE_BASE}${selectedMovie.poster_path}` : ''}
+                                        alt={selectedMovie.title}
+                                        className="modal-poster"
+                                    />
+                                </div>
+
+                                <div className="modal-body">
+                                    <h2 className="modal-title">{selectedMovie.title}</h2>
+                                    
+                                    <div className="modal-meta">
+                                        <div className="modal-meta-item">
+                                            📅 {movieDetails?.release_date?.split('-')[0] || 'N/A'}
+                                        </div>
+                                        <div className="modal-meta-item">
+                                            ⭐ {selectedMovie.vote_average?.toFixed(1)}/10
+                                        </div>
+                                        {movieDetails?.runtime && (
+                                            <div className="modal-meta-item">
+                                                ⏱️ {Math.floor(movieDetails.runtime / 60)}h {movieDetails.runtime % 60}m
+                                            </div>
+                                        )}
+                                        {movieDetails?.genres && (
+                                            <div className="modal-meta-item">
+                                                🎭 {movieDetails.genres.map(g => g.name).join(', ')}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {selectedMovie.streamingProviders && (
+                                        <div className="modal-section">
+                                            <div className="modal-section-title">Where to Watch</div>
+                                            <div className="streaming-info">
+                                                {selectedMovie.streamingProviders.flatrate?.length > 0 && (
+                                                    <>
+                                                        {selectedMovie.streamingProviders.flatrate.map(provider => (
+                                                            <div key={provider.provider_id} className="streaming-badge">
+                                                                {provider.provider_name}
+                                                            </div>
+                                                        ))}
+                                                    </>
+                                                )}
+                                                {selectedMovie.streamingProviders.rent?.length > 0 && !selectedMovie.streamingProviders.flatrate?.length && (
+                                                    <>
+                                                        {selectedMovie.streamingProviders.rent.map(provider => (
+                                                            <div 
+                                                                key={provider.provider_id} 
+                                                                className="streaming-badge"
+                                                                style={{ background: 'var(--accent-gold)' }}
+                                                            >
+                                                                {provider.provider_name}
+                                                            </div>
+                                                        ))}
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="modal-section">
+                                        <div className="modal-section-title">Overview</div>
+                                        <p className="modal-overview">{selectedMovie.overview || 'No overview available.'}</p>
+                                    </div>
+
+                                    {movieDetails?.trailer && (
+                                        <div className="modal-section">
+                                            <div className="modal-section-title">Trailer</div>
+                                            <div className="trailer-container">
+                                                <iframe
+                                                    src={movieDetails.trailer}
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                    allowFullScreen
+                                                    title="Movie Trailer"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!movieDetails?.trailer && movieDetails !== null && (
+                                        <div className="modal-section">
+                                            <div className="modal-section-title">Trailer</div>
+                                            <div className="no-trailer">No trailer available</div>
+                                        </div>
+                                    )}
+
+                                    {movieDetails?.cast && movieDetails.cast.length > 0 && (
+                                        <div className="modal-section">
+                                            <div className="modal-section-title">Cast</div>
+                                            <div className="cast-grid">
+                                                {movieDetails.cast.map(actor => (
+                                                    <div key={actor.id} className="cast-member">
+                                                        {actor.profile_path ? (
+                                                            <img
+                                                                src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                                                                alt={actor.name}
+                                                                className="cast-photo"
+                                                            />
+                                                        ) : (
+                                                            <div className="cast-photo" style={{ background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>
+                                                                👤
+                                                            </div>
+                                                        )}
+                                                        <div className="cast-name">{actor.name}</div>
+                                                        <div className="cast-character">{actor.character}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="app-container">
                     <div className="header">
                         <div className="marquee-lights">
                             <div className="light"></div>
@@ -2006,9 +2385,17 @@
                                                     src={movie.poster_path ? `${TMDB_IMAGE_BASE}${movie.poster_path}` : ''}
                                                     alt={movie.title}
                                                     className="movie-poster"
+                                                    onClick={() => openMovieDetails(movie)}
+                                                    style={{ cursor: 'pointer' }}
                                                 />
                                                 <div className="movie-info">
-                                                    <h3 className="movie-title">{movie.title}</h3>
+                                                    <h3 
+                                                        className="movie-title"
+                                                        onClick={() => openMovieDetails(movie)}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        {movie.title}
+                                                    </h3>
                                                     <div className="movie-meta">
                                                         <span>{movie.release_date?.split('-')[0]}</span>
                                                         <span>⭐ {movie.vote_average?.toFixed(1)}</span>
@@ -2085,9 +2472,17 @@
                                                     src={movie.poster_path ? `${TMDB_IMAGE_BASE}${movie.poster_path}` : ''}
                                                     alt={movie.title}
                                                     className="movie-poster"
+                                                    onClick={() => openMovieDetails(movie)}
+                                                    style={{ cursor: 'pointer' }}
                                                 />
                                                 <div className="movie-info">
-                                                    <h3 className="movie-title">{movie.title}</h3>
+                                                    <h3 
+                                                        className="movie-title"
+                                                        onClick={() => openMovieDetails(movie)}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        {movie.title}
+                                                    </h3>
                                                     <div className="movie-meta">
                                                         <span>{movie.release_date?.split('-')[0]}</span>
                                                         <span>⭐ {movie.vote_average?.toFixed(1)}</span>
@@ -2275,6 +2670,7 @@
                         </button>
                     </div>
                 </div>
+                </>
             );
         }
 
