@@ -153,7 +153,7 @@
         }
 
         .mode-badge {
-            display: inline-block; 
+            display: inline-block;
             padding: 6px 14px;
             background: var(--accent-teal);
             color: white;
@@ -1427,6 +1427,7 @@
             const [localRankedVotes, setLocalRankedVotes] = useState({}); // {userName: {first: movieId, second: movieId, third: movieId}}
             const [localVotingPhase, setLocalVotingPhase] = useState(VOTING_PHASES.BROWSING);
             const [largeGroupMode, setLargeGroupMode] = useState(false); // Toggle for 1 vs 3 favorites
+            const [currentVoterIndex, setCurrentVoterIndex] = useState(0); // Track which user is voting in local mode
             
             // Online mode state
             const [sessionData, setSessionData] = useState(null);
@@ -1601,6 +1602,7 @@
                 setLocalRankedVotes({});
                 setLocalVotingPhase(VOTING_PHASES.BROWSING);
                 setLargeGroupMode(false);
+                setCurrentVoterIndex(0);
             };
 
             const addLocalUser = () => {
@@ -2371,8 +2373,48 @@
 
                         // Phase 1: Browsing and Favoriting
                         if (currentPhase === VOTING_PHASES.BROWSING && !loading && movies.length > 0) {
+                            const currentUser = mode === 'local' ? localUsers[currentVoterIndex] : userName;
+                            
                             return (
-                                <div className="movie-grid">
+                                <>
+                                    {/* Local mode: Show current voter */}
+                                    {mode === 'local' && localUsers.length > 0 && (
+                                        <div className="phase-banner" style={{ marginBottom: '20px' }}>
+                                            <h3 className="phase-title" style={{ fontSize: '1.5rem', marginBottom: '10px' }}>
+                                                {currentUser}'s Turn
+                                            </h3>
+                                            <p className="phase-description">
+                                                Select your favorites, then pass to the next person
+                                            </p>
+                                            <div className="host-controls">
+                                                {currentVoterIndex > 0 && (
+                                                    <button 
+                                                        onClick={() => setCurrentVoterIndex(currentVoterIndex - 1)}
+                                                        className="btn-secondary"
+                                                    >
+                                                        ← Previous Person
+                                                    </button>
+                                                )}
+                                                {currentVoterIndex < localUsers.length - 1 && (
+                                                    <button 
+                                                        onClick={() => setCurrentVoterIndex(currentVoterIndex + 1)}
+                                                    >
+                                                        Next Person →
+                                                    </button>
+                                                )}
+                                                {currentVoterIndex === localUsers.length - 1 && (
+                                                    <button 
+                                                        onClick={() => setCurrentVoterIndex(0)}
+                                                        style={{ background: 'var(--accent-gold)' }}
+                                                    >
+                                                        🔄 Start Over
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    <div className="movie-grid">
                                     {movies.map(movie => {
                                         const favoriteCount = getMovieFavoriteCount(movie.id);
                                         const isFavorited = mode === 'local' 
@@ -2452,11 +2494,13 @@
                                         );
                                     })}
                                 </div>
+                                </>
                             );
                         }
 
                         // Phase 2: Final Ranked Voting
                         if (currentPhase === VOTING_PHASES.FINAL_VOTE && !loading) {
+                            const currentUser = mode === 'local' ? localUsers[currentVoterIndex] : userName;
                             const favoritedMovies = getFavoritedMovies();
                             const userVotes = getUserRankedVotes(currentUser || userName);
 
@@ -2470,7 +2514,45 @@
                             }
 
                             return (
-                                <div className="movie-grid">
+                                <>
+                                    {/* Local mode: Show current voter in Phase 2 */}
+                                    {mode === 'local' && localUsers.length > 0 && (
+                                        <div className="phase-banner" style={{ marginBottom: '20px' }}>
+                                            <h3 className="phase-title" style={{ fontSize: '1.5rem', marginBottom: '10px' }}>
+                                                {currentUser}'s Turn to Rank
+                                            </h3>
+                                            <p className="phase-description">
+                                                Pick your 1st, 2nd, and 3rd choices
+                                            </p>
+                                            <div className="host-controls">
+                                                {currentVoterIndex > 0 && (
+                                                    <button 
+                                                        onClick={() => setCurrentVoterIndex(currentVoterIndex - 1)}
+                                                        className="btn-secondary"
+                                                    >
+                                                        ← Previous Person
+                                                    </button>
+                                                )}
+                                                {currentVoterIndex < localUsers.length - 1 && (
+                                                    <button 
+                                                        onClick={() => setCurrentVoterIndex(currentVoterIndex + 1)}
+                                                    >
+                                                        Next Person →
+                                                    </button>
+                                                )}
+                                                {currentVoterIndex === localUsers.length - 1 && (
+                                                    <button 
+                                                        onClick={() => setCurrentVoterIndex(0)}
+                                                        style={{ background: 'var(--accent-gold)' }}
+                                                    >
+                                                        🔄 Review All Votes
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    <div className="movie-grid">
                                     {favoritedMovies.map(movie => {
                                         return (
                                             <div key={movie.id} className="movie-card">
@@ -2554,6 +2636,7 @@
                                         );
                                     })}
                                 </div>
+                                </>
                             );
                         }
 
