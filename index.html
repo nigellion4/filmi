@@ -2140,6 +2140,14 @@
                 } else if (userFavorites.length < maxFavorites) {
                     // Add favorite
                     await database.ref(`sessions/${roomCode}/favorites/${movieId}/${userName}`).set(true);
+                    
+                    // IMPORTANT: Also add the movie data to Firebase so everyone can see it
+                    // Find the movie in the current movies array
+                    const movie = movies.find(m => m.id === movieId);
+                    if (movie) {
+                        // Add to Firebase movies if not already there
+                        await database.ref(`sessions/${roomCode}/movies/${movieId}`).set(movie);
+                    }
                 }
             };
 
@@ -2250,6 +2258,15 @@
             const getFavoritedMovies = () => {
                 const favorites = mode === 'local' ? localFavorites : sessionData?.favorites || {};
                 const favoritedIds = Object.keys(favorites).map(id => parseInt(id));
+                
+                // For online mode, we need to include ALL favorited movies from Firebase
+                // not just what's in the local movies array (which might be from a search)
+                if (mode === 'online' && sessionData?.movies) {
+                    const allSessionMovies = Object.values(sessionData.movies);
+                    return allSessionMovies.filter(m => favoritedIds.includes(m.id));
+                }
+                
+                // For local mode, filter from current movies array
                 return movies.filter(m => favoritedIds.includes(m.id));
             };
 
