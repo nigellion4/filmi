@@ -1441,7 +1441,8 @@
             28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
             99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
             27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance", 878: "Sci-Fi",
-            10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western"
+            10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western",
+            'holiday': "Holiday" // Special keyword search
         };
 
         const DECADES = [
@@ -1488,7 +1489,11 @@
 
         function App() {
             const [mode, setMode] = useState(''); // 'local' or 'online'
-            const [screen, setScreen] = useState('lobby'); // 'lobby', 'session'
+            const [screen, setScreen] = useState('lobby'); // 'lobby', 'session', 'profile'
+            
+            // User Profile & Watchlist System
+            const [userProfile, setUserProfile] = useState(null); // { username, watchlist: { movieId: 'seen'/'want' } }
+            const [showProfileMenu, setShowProfileMenu] = useState(false);
             const [roomCode, setRoomCode] = useState('');
             const [userName, setUserName] = useState('');
             const [joinCode, setJoinCode] = useState('');
@@ -1725,6 +1730,70 @@
                     console.error('Error fetching streaming providers:', error);
                     return null;
                 }
+            };
+
+            // User Profile & Watchlist Functions
+            const loadUserProfile = (username) => {
+                const profiles = JSON.parse(localStorage.getItem('filmi_profiles') || '{}');
+                return profiles[username] || { username, watchlist: {} };
+            };
+
+            const saveUserProfile = (profile) => {
+                const profiles = JSON.parse(localStorage.getItem('filmi_profiles') || '{}');
+                profiles[profile.username] = profile;
+                localStorage.setItem('filmi_profiles', JSON.stringify(profiles));
+                setUserProfile(profile);
+            };
+
+            const loginProfile = (username) => {
+                if (!username.trim()) return;
+                const profile = loadUserProfile(username.trim());
+                setUserProfile(profile);
+                saveUserProfile(profile);
+            };
+
+            const logoutProfile = () => {
+                setUserProfile(null);
+                setShowProfileMenu(false);
+            };
+
+            const addToWatchlist = (movieId, status) => {
+                // status: 'seen' or 'want'
+                if (!userProfile) return;
+                
+                const updatedProfile = {
+                    ...userProfile,
+                    watchlist: {
+                        ...userProfile.watchlist,
+                        [movieId]: status
+                    }
+                };
+                saveUserProfile(updatedProfile);
+            };
+
+            const removeFromWatchlist = (movieId) => {
+                if (!userProfile) return;
+                
+                const updatedProfile = {
+                    ...userProfile,
+                    watchlist: { ...userProfile.watchlist }
+                };
+                delete updatedProfile.watchlist[movieId];
+                saveUserProfile(updatedProfile);
+            };
+
+            const getWatchlistStatus = (movieId) => {
+                if (!userProfile) return null;
+                return userProfile.watchlist[movieId] || null;
+            };
+
+            const getWatchlistMovies = (status) => {
+                // status: 'seen', 'want', or null for all
+                if (!userProfile) return [];
+                const watchlist = userProfile.watchlist;
+                return Object.entries(watchlist)
+                    .filter(([id, s]) => !status || s === status)
+                    .map(([id]) => parseInt(id));
             };
 
             const startLocalSession = () => {
