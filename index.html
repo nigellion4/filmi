@@ -1510,6 +1510,7 @@
             
             // Shared state
             const [movies, setMovies] = useState([]);
+            const [hasLocalSearchResults, setHasLocalSearchResults] = useState(false); // Track if user did a local search
             const [searchQuery, setSearchQuery] = useState('');
             const [searchSuggestions, setSearchSuggestions] = useState([]);
             const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1533,7 +1534,8 @@
                         const data = snapshot.val();
                         if (data) {
                             setSessionData(data);
-                            if (data.movies) {
+                            // Only update movies if user doesn't have local search results
+                            if (data.movies && !hasLocalSearchResults) {
                                 const movieList = Object.values(data.movies);
                                 setMovies(movieList);
                             }
@@ -1542,7 +1544,7 @@
 
                     return () => sessionRef.off();
                 }
-            }, [mode, screen, roomCode]);
+            }, [mode, screen, roomCode, hasLocalSearchResults]);
 
             const fetchMovieDetails = async (movieId) => {
                 try {
@@ -1683,8 +1685,7 @@
             };
 
             const searchByActorOnline = async (actorId) => {
-                if (!firebaseInitialized) return;
-                
+                // Actor search results are LOCAL to each user
                 setLoading(true);
                 try {
                     const response = await fetch(
@@ -1693,18 +1694,20 @@
                     const data = await response.json();
                     const movieList = data.results || [];
                     
-                    const moviesObj = {};
+                    const moviesWithProviders = [];
                     for (const movie of movieList.slice(0, 20)) {
                         const providers = await fetchStreamingProviders(movie.id);
-                        moviesObj[movie.id] = {
+                        moviesWithProviders.push({
                             ...movie,
                             streamingProviders: providers
-                        };
+                        });
                     }
                     
-                    await database.ref(`sessions/${roomCode}/movies`).set(moviesObj);
-                    await database.ref(`sessions/${roomCode}/currentPage`).set(1);
-                    await database.ref(`sessions/${roomCode}/hasMorePages`).set(data.total_pages > 1);
+                    // Store locally, don't sync to Firebase
+                    setMovies(moviesWithProviders);
+                    setCurrentPage(1);
+                    setHasMorePages(data.total_pages > 1);
+                    setHasLocalSearchResults(true); // Mark as local search
                 } catch (error) {
                     console.error('Error searching by actor:', error);
                 }
@@ -1928,6 +1931,26 @@
                 }
             };
 
+            const resetToHome = () => {
+                // Reset all search filters
+                setSearchQuery('');
+                setSelectedGenre('');
+                setSelectedDecade('');
+                setSelectedLanguage('');
+                setSortBy('popularity');
+                setShowSuggestions(false);
+                setSearchSuggestions([]);
+                setHasLocalSearchResults(false);
+                
+                // Load popular movies
+                if (mode === 'local') {
+                    fetchPopularMoviesLocal();
+                } else if (mode === 'online') {
+                    // In online mode, just clear local search results to show synced movies
+                    setHasLocalSearchResults(false);
+                }
+            };
+
             const searchMoviesLocal = async (customQuery = null) => {
                 const query = customQuery || searchQuery;
                 setShowSuggestions(false); // Hide suggestions when searching
@@ -1993,18 +2016,9 @@
             };
 
             const searchMoviesOnline = async (customQuery = null) => {
-                if (!firebaseInitialized) {
-                    setError('Firebase is not available for searching.');
-                    return;
-                }
-
+                // Search results are LOCAL to each user - don't sync to Firebase
                 const query = customQuery || searchQuery;
                 setShowSuggestions(false); // Hide suggestions when searching
-
-                if (!query.trim() && !selectedGenre && !selectedDecade && !selectedLanguage && sortBy === 'popularity') {
-                    fetchPopularMoviesOnline(roomCode);
-                    return;
-                }
 
                 setLoading(true);
                 try {
@@ -2043,19 +2057,20 @@
                     const data = await response.json();
                     const movieList = data.results || [];
 
-                    const moviesObj = {};
-                    
+                    const moviesWithProviders = [];
                     for (const movie of movieList) {
                         const providers = await fetchStreamingProviders(movie.id);
-                        moviesObj[movie.id] = {
+                        moviesWithProviders.push({
                             ...movie,
                             streamingProviders: providers
-                        };
+                        });
                     }
                     
-                    await database.ref(`sessions/${roomCode}/movies`).set(moviesObj);
-                    await database.ref(`sessions/${roomCode}/currentPage`).set(1);
-                    await database.ref(`sessions/${roomCode}/hasMorePages`).set(data.total_pages > 1);
+                    // Store locally, don't sync to Firebase
+                    setMovies(moviesWithProviders);
+                    setCurrentPage(1);
+                    setHasMorePages(data.total_pages > 1);
+                    setHasLocalSearchResults(true); // Mark as local search
                 } catch (error) {
                     console.error('Error searching movies:', error);
                 }
@@ -2681,8 +2696,17 @@
                                 <option value="highest_rated">Highest Rated (7+)</option>
                             </select>
                             <button onClick={mode === 'local' ? searchMoviesLocal : searchMoviesOnline}>
-                                Search
+                                🔍 Search
                             </button>
+                            {(searchQuery || selectedGenre || selectedDecade || selectedLanguage !== '' || sortBy !== 'popularity' || hasLocalSearchResults) && (
+                                <button 
+                                    onClick={resetToHome}
+                                    style={{ background: 'var(--accent-red)' }}
+                                    title="Reset to popular movies"
+                                >
+                                    🏠 Home
+                                </button>
+                            )}
                         </div>
                     </div>
 
