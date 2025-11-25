@@ -1428,6 +1428,8 @@
             const [localVotingPhase, setLocalVotingPhase] = useState(VOTING_PHASES.BROWSING);
             const [largeGroupMode, setLargeGroupMode] = useState(false); // Toggle for 1 vs 3 favorites
             const [currentVoterIndex, setCurrentVoterIndex] = useState(0); // Track which user is voting in local mode
+            const [localFavoritesSubmitted, setLocalFavoritesSubmitted] = useState([]); // Array of usernames who submitted favorites
+            const [localRankedSubmitted, setLocalRankedSubmitted] = useState([]); // Array of usernames who submitted ranked votes
             
             // Online mode state
             const [sessionData, setSessionData] = useState(null);
@@ -1531,7 +1533,9 @@
                             }
                         },
                         favorites: {},           // {movieId: {userName: true}}
+                        favoritesSubmitted: {},  // {userName: true} - who submitted favorites
                         rankedVotes: {},         // {userName: {first: movieId, second: movieId, third: movieId}}
+                        rankedSubmitted: {},     // {userName: true} - who submitted ranked votes
                         votingPhase: VOTING_PHASES.BROWSING,
                         largeGroupMode: false,   // Toggle for 1 vs 3 favorites
                         movies: {},
@@ -1603,6 +1607,8 @@
                 setLocalVotingPhase(VOTING_PHASES.BROWSING);
                 setLargeGroupMode(false);
                 setCurrentVoterIndex(0);
+                setLocalFavoritesSubmitted([]);
+                setLocalRankedSubmitted([]);
             };
 
             const addLocalUser = () => {
@@ -1888,6 +1894,53 @@
             const closeMovieDetails = () => {
                 setSelectedMovie(null);
                 setMovieDetails(null);
+            };
+
+            // Submit votes functions
+            const submitFavoritesLocal = (userName) => {
+                if (!localFavoritesSubmitted.includes(userName)) {
+                    setLocalFavoritesSubmitted([...localFavoritesSubmitted, userName]);
+                }
+            };
+
+            const submitRankedVotesLocal = (userName) => {
+                if (!localRankedSubmitted.includes(userName)) {
+                    setLocalRankedSubmitted([...localRankedSubmitted, userName]);
+                }
+            };
+
+            const submitFavoritesOnline = async () => {
+                if (!firebaseInitialized) return;
+                await database.ref(`sessions/${roomCode}/favoritesSubmitted/${userName}`).set(true);
+            };
+
+            const submitRankedVotesOnline = async () => {
+                if (!firebaseInitialized) return;
+                await database.ref(`sessions/${roomCode}/rankedSubmitted/${userName}`).set(true);
+            };
+
+            const getSubmittedCount = (phase) => {
+                if (mode === 'local') {
+                    return phase === 'favorites' ? localFavoritesSubmitted.length : localRankedSubmitted.length;
+                } else {
+                    const submitted = phase === 'favorites' 
+                        ? sessionData?.favoritesSubmitted || {}
+                        : sessionData?.rankedSubmitted || {};
+                    return Object.keys(submitted).length;
+                }
+            };
+
+            const hasUserSubmitted = (phase, user) => {
+                if (mode === 'local') {
+                    return phase === 'favorites' 
+                        ? localFavoritesSubmitted.includes(user)
+                        : localRankedSubmitted.includes(user);
+                } else {
+                    const submitted = phase === 'favorites'
+                        ? sessionData?.favoritesSubmitted || {}
+                        : sessionData?.rankedSubmitted || {};
+                    return !!submitted[user || userName];
+                }
             };
 
             const getUserFavoriteCount = (userName) => {
@@ -2377,16 +2430,48 @@
                             
                             return (
                                 <>
-                                    {/* Local mode: Show current voter */}
+                                    {/* Phase 1 Progress Tracker */}
                                     {mode === 'local' && localUsers.length > 0 && (
                                         <div className="phase-banner" style={{ marginBottom: '20px' }}>
                                             <h3 className="phase-title" style={{ fontSize: '1.5rem', marginBottom: '10px' }}>
                                                 {currentUser}'s Turn
                                             </h3>
                                             <p className="phase-description">
-                                                Select your favorites, then pass to the next person
+                                                Select up to {largeGroupMode ? '1 favorite' : '3 favorites'}, then submit your votes
                                             </p>
+                                            
+                                            {/* Submission Counter */}
+                                            <div className="phase-stats">
+                                                <div className="stat-badge">
+                                                    <strong>{getSubmittedCount('favorites')}/{localUsers.length}</strong> submitted
+                                                </div>
+                                                {getUserFavoriteCount(currentUser) > 0 && (
+                                                    <div className="stat-badge">
+                                                        You picked: <strong>{getUserFavoriteCount(currentUser)}</strong>
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             <div className="host-controls">
+                                                {!hasUserSubmitted('favorites', currentUser) ? (
+                                                    <button 
+                                                        onClick={() => {
+                                                            submitFavoritesLocal(currentUser);
+                                                            if (currentVoterIndex < localUsers.length - 1) {
+                                                                setCurrentVoterIndex(currentVoterIndex + 1);
+                                                            }
+                                                        }}
+                                                        style={{ background: 'var(--accent-gold)' }}
+                                                        disabled={getUserFavoriteCount(currentUser) === 0}
+                                                    >
+                                                        ✅ Submit My Votes
+                                                    </button>
+                                                ) : (
+                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                        ✅ Votes Submitted!
+                                                    </div>
+                                                )}
+                                                
                                                 {currentVoterIndex > 0 && (
                                                     <button 
                                                         onClick={() => setCurrentVoterIndex(currentVoterIndex - 1)}
@@ -2398,19 +2483,57 @@
                                                 {currentVoterIndex < localUsers.length - 1 && (
                                                     <button 
                                                         onClick={() => setCurrentVoterIndex(currentVoterIndex + 1)}
+                                                        className="btn-secondary"
                                                     >
                                                         Next Person →
                                                     </button>
                                                 )}
-                                                {currentVoterIndex === localUsers.length - 1 && (
-                                                    <button 
-                                                        onClick={() => setCurrentVoterIndex(0)}
-                                                        style={{ background: 'var(--accent-gold)' }}
-                                                    >
-                                                        🔄 Start Over
-                                                    </button>
+                                            </div>
+                                            
+                                            {/* Ready to proceed indicator */}
+                                            {getSubmittedCount('favorites') === localUsers.length && (
+                                                <div style={{ marginTop: '15px', padding: '15px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)', textAlign: 'center', fontWeight: 'bold' }}>
+                                                    🎉 Everyone has voted! Ready to proceed to final vote.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Online mode: Show submission status */}
+                                    {mode === 'online' && (
+                                        <div className="phase-banner" style={{ marginBottom: '20px' }}>
+                                            <div className="phase-stats">
+                                                <div className="stat-badge">
+                                                    <strong>{getSubmittedCount('favorites')}/{Object.keys(sessionData?.users || {}).length}</strong> submitted
+                                                </div>
+                                                {getUserFavoriteCount(userName) > 0 && (
+                                                    <div className="stat-badge">
+                                                        You picked: <strong>{getUserFavoriteCount(userName)}</strong>
+                                                    </div>
                                                 )}
                                             </div>
+                                            
+                                            <div className="host-controls">
+                                                {!hasUserSubmitted('favorites', userName) ? (
+                                                    <button 
+                                                        onClick={submitFavoritesOnline}
+                                                        style={{ background: 'var(--accent-gold)' }}
+                                                        disabled={getUserFavoriteCount(userName) === 0}
+                                                    >
+                                                        ✅ Submit My Votes
+                                                    </button>
+                                                ) : (
+                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                        ✅ Votes Submitted!
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            {getSubmittedCount('favorites') === Object.keys(sessionData?.users || {}).length && (
+                                                <div style={{ marginTop: '15px', padding: '15px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)', textAlign: 'center', fontWeight: 'bold' }}>
+                                                    🎉 Everyone has voted! Ready to proceed to final vote.
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     
@@ -2515,16 +2638,50 @@
 
                             return (
                                 <>
-                                    {/* Local mode: Show current voter in Phase 2 */}
+                                    {/* Phase 2 Progress Tracker - Local Mode */}
                                     {mode === 'local' && localUsers.length > 0 && (
                                         <div className="phase-banner" style={{ marginBottom: '20px' }}>
                                             <h3 className="phase-title" style={{ fontSize: '1.5rem', marginBottom: '10px' }}>
                                                 {currentUser}'s Turn to Rank
                                             </h3>
                                             <p className="phase-description">
-                                                Pick your 1st, 2nd, and 3rd choices
+                                                Pick your 1st, 2nd, and 3rd choices, then submit
                                             </p>
+                                            
+                                            {/* Submission Counter */}
+                                            <div className="phase-stats">
+                                                <div className="stat-badge">
+                                                    <strong>{getSubmittedCount('ranked')}/{localUsers.length}</strong> submitted
+                                                </div>
+                                                {userVotes.first || userVotes.second || userVotes.third ? (
+                                                    <div className="stat-badge">
+                                                        You ranked: <strong>
+                                                            {[userVotes.first, userVotes.second, userVotes.third].filter(Boolean).length}/3
+                                                        </strong>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+
                                             <div className="host-controls">
+                                                {!hasUserSubmitted('ranked', currentUser) ? (
+                                                    <button 
+                                                        onClick={() => {
+                                                            submitRankedVotesLocal(currentUser);
+                                                            if (currentVoterIndex < localUsers.length - 1) {
+                                                                setCurrentVoterIndex(currentVoterIndex + 1);
+                                                            }
+                                                        }}
+                                                        style={{ background: 'var(--accent-gold)' }}
+                                                        disabled={!userVotes.first && !userVotes.second && !userVotes.third}
+                                                    >
+                                                        ✅ Submit My Rankings
+                                                    </button>
+                                                ) : (
+                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                        ✅ Rankings Submitted!
+                                                    </div>
+                                                )}
+                                                
                                                 {currentVoterIndex > 0 && (
                                                     <button 
                                                         onClick={() => setCurrentVoterIndex(currentVoterIndex - 1)}
@@ -2536,19 +2693,59 @@
                                                 {currentVoterIndex < localUsers.length - 1 && (
                                                     <button 
                                                         onClick={() => setCurrentVoterIndex(currentVoterIndex + 1)}
+                                                        className="btn-secondary"
                                                     >
                                                         Next Person →
                                                     </button>
                                                 )}
-                                                {currentVoterIndex === localUsers.length - 1 && (
+                                            </div>
+                                            
+                                            {/* Ready to announce winner */}
+                                            {getSubmittedCount('ranked') === localUsers.length && (
+                                                <div style={{ marginTop: '15px', padding: '15px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)', textAlign: 'center', fontWeight: 'bold' }}>
+                                                    🎉 Everyone has voted! Ready to announce the winner.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Phase 2 Progress - Online Mode */}
+                                    {mode === 'online' && (
+                                        <div className="phase-banner" style={{ marginBottom: '20px' }}>
+                                            <div className="phase-stats">
+                                                <div className="stat-badge">
+                                                    <strong>{getSubmittedCount('ranked')}/{Object.keys(sessionData?.users || {}).length}</strong> submitted
+                                                </div>
+                                                {userVotes.first || userVotes.second || userVotes.third ? (
+                                                    <div className="stat-badge">
+                                                        You ranked: <strong>
+                                                            {[userVotes.first, userVotes.second, userVotes.third].filter(Boolean).length}/3
+                                                        </strong>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                            
+                                            <div className="host-controls">
+                                                {!hasUserSubmitted('ranked', userName) ? (
                                                     <button 
-                                                        onClick={() => setCurrentVoterIndex(0)}
+                                                        onClick={submitRankedVotesOnline}
                                                         style={{ background: 'var(--accent-gold)' }}
+                                                        disabled={!userVotes.first && !userVotes.second && !userVotes.third}
                                                     >
-                                                        🔄 Review All Votes
+                                                        ✅ Submit My Rankings
                                                     </button>
+                                                ) : (
+                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                        ✅ Rankings Submitted!
+                                                    </div>
                                                 )}
                                             </div>
+                                            
+                                            {getSubmittedCount('ranked') === Object.keys(sessionData?.users || {}).length && (
+                                                <div style={{ marginTop: '15px', padding: '15px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)', textAlign: 'center', fontWeight: 'bold' }}>
+                                                    🎉 Everyone has voted! Ready to announce the winner.
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     
