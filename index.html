@@ -1517,6 +1517,7 @@
             const [selectedGenre, setSelectedGenre] = useState('');
             const [selectedDecade, setSelectedDecade] = useState('');
             const [selectedLanguage, setSelectedLanguage] = useState('');
+            const [sortBy, setSortBy] = useState('popularity'); // 'popularity', 'new_releases', 'highest_rated'
             const [loading, setLoading] = useState(false);
             const [currentPage, setCurrentPage] = useState(1);
             const [hasMorePages, setHasMorePages] = useState(true);
@@ -1577,17 +1578,40 @@
                 }
 
                 try {
-                    const response = await fetch(
-                        `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=1`
-                    );
-                    const data = await response.json();
-                    const suggestions = (data.results || []).slice(0, 8).map(movie => ({
+                    // Search both movies and people (actors)
+                    const [movieResponse, peopleResponse] = await Promise.all([
+                        fetch(`${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=1`),
+                        fetch(`${TMDB_BASE_URL}/search/person?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=1`)
+                    ]);
+                    
+                    const movieData = await movieResponse.json();
+                    const peopleData = await peopleResponse.json();
+                    
+                    // Get movie suggestions
+                    const movieSuggestions = (movieData.results || []).slice(0, 5).map(movie => ({
                         id: movie.id,
                         title: movie.title,
                         year: movie.release_date?.split('-')[0],
-                        poster: movie.poster_path
+                        poster: movie.poster_path,
+                        type: 'movie'
                     }));
-                    setSearchSuggestions(suggestions);
+                    
+                    // Get actor suggestions (only actors, not crew)
+                    const actorSuggestions = (peopleData.results || [])
+                        .filter(person => person.known_for_department === 'Acting')
+                        .slice(0, 3)
+                        .map(person => ({
+                            id: person.id,
+                            title: person.name,
+                            year: person.known_for?.[0]?.title || person.known_for?.[0]?.name,
+                            poster: person.profile_path,
+                            type: 'actor',
+                            knownFor: person.known_for?.slice(0, 2).map(m => m.title || m.name).join(', ')
+                        }));
+                    
+                    // Combine and limit to 8 total
+                    const combined = [...movieSuggestions, ...actorSuggestions].slice(0, 8);
+                    setSearchSuggestions(combined);
                 } catch (error) {
                     console.error('Error fetching suggestions:', error);
                     setSearchSuggestions([]);
@@ -1607,16 +1631,84 @@
                 }, 300); // Wait 300ms after user stops typing
             };
 
-            const selectSuggestion = (suggestion) => {
-                setSearchQuery(suggestion.title);
+            const selectSuggestion = async (suggestion) => {
                 setShowSuggestions(false);
                 setSearchSuggestions([]);
-                // Trigger search with selected title
-                if (mode === 'local') {
-                    searchMoviesLocal(suggestion.title);
+                
+                if (suggestion.type === 'actor') {
+                    // Search for movies with this actor
+                    setSearchQuery(suggestion.title);
+                    
+                    if (mode === 'local') {
+                        await searchByActor(suggestion.id);
+                    } else {
+                        await searchByActorOnline(suggestion.id);
+                    }
                 } else {
-                    searchMoviesOnline(suggestion.title);
+                    // Regular movie search
+                    setSearchQuery(suggestion.title);
+                    if (mode === 'local') {
+                        searchMoviesLocal(suggestion.title);
+                    } else {
+                        searchMoviesOnline(suggestion.title);
+                    }
                 }
+            };
+
+            const searchByActor = async (actorId) => {
+                setLoading(true);
+                try {
+                    const response = await fetch(
+                        `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_cast=${actorId}&sort_by=popularity.desc`
+                    );
+                    const data = await response.json();
+                    const movieList = data.results || [];
+                    
+                    const moviesWithProviders = [];
+                    for (const movie of movieList.slice(0, 20)) {
+                        const providers = await fetchStreamingProviders(movie.id);
+                        moviesWithProviders.push({
+                            ...movie,
+                            streamingProviders: providers
+                        });
+                    }
+                    
+                    setMovies(moviesWithProviders);
+                    setCurrentPage(1);
+                    setHasMorePages(data.total_pages > 1);
+                } catch (error) {
+                    console.error('Error searching by actor:', error);
+                }
+                setLoading(false);
+            };
+
+            const searchByActorOnline = async (actorId) => {
+                if (!firebaseInitialized) return;
+                
+                setLoading(true);
+                try {
+                    const response = await fetch(
+                        `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_cast=${actorId}&sort_by=popularity.desc`
+                    );
+                    const data = await response.json();
+                    const movieList = data.results || [];
+                    
+                    const moviesObj = {};
+                    for (const movie of movieList.slice(0, 20)) {
+                        const providers = await fetchStreamingProviders(movie.id);
+                        moviesObj[movie.id] = {
+                            ...movie,
+                            streamingProviders: providers
+                        };
+                    }
+                    
+                    await database.ref(`sessions/${roomCode}/movies`).set(moviesObj);
+                    await database.ref(`sessions/${roomCode}/currentPage`).set(1);
+                    await database.ref(`sessions/${roomCode}/hasMorePages`).set(data.total_pages > 1);
+                } catch (error) {
+                    console.error('Error searching by actor:', error);
+                }
+                setLoading(false);
             };
 
             const fetchStreamingProviders = async (movieId) => {
@@ -1840,14 +1932,26 @@
                 const query = customQuery || searchQuery;
                 setShowSuggestions(false); // Hide suggestions when searching
                 
-                if (!query.trim() && !selectedGenre && !selectedDecade && !selectedLanguage) {
+                if (!query.trim() && !selectedGenre && !selectedDecade && !selectedLanguage && sortBy === 'popularity') {
                     fetchPopularMoviesLocal();
                     return;
                 }
 
                 setLoading(true);
                 try {
-                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&sort_by=popularity.desc`;
+                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}`;
+                    
+                    // Handle sort by
+                    if (sortBy === 'new_releases') {
+                        const sixMonthsAgo = new Date();
+                        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+                        const dateString = sixMonthsAgo.toISOString().split('T')[0];
+                        url += `&primary_release_date.gte=${dateString}&sort_by=primary_release_date.desc`;
+                    } else if (sortBy === 'highest_rated') {
+                        url += `&vote_average.gte=7&vote_count.gte=100&sort_by=vote_average.desc`;
+                    } else {
+                        url += `&sort_by=popularity.desc`;
+                    }
                     
                     if (query.trim()) {
                         url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
@@ -1897,14 +2001,26 @@
                 const query = customQuery || searchQuery;
                 setShowSuggestions(false); // Hide suggestions when searching
 
-                if (!query.trim() && !selectedGenre && !selectedDecade && !selectedLanguage) {
+                if (!query.trim() && !selectedGenre && !selectedDecade && !selectedLanguage && sortBy === 'popularity') {
                     fetchPopularMoviesOnline(roomCode);
                     return;
                 }
 
                 setLoading(true);
                 try {
-                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&sort_by=popularity.desc`;
+                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}`;
+                    
+                    // Handle sort by
+                    if (sortBy === 'new_releases') {
+                        const sixMonthsAgo = new Date();
+                        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+                        const dateString = sixMonthsAgo.toISOString().split('T')[0];
+                        url += `&primary_release_date.gte=${dateString}&sort_by=primary_release_date.desc`;
+                    } else if (sortBy === 'highest_rated') {
+                        url += `&vote_average.gte=7&vote_count.gte=100&sort_by=vote_average.desc`;
+                    } else {
+                        url += `&sort_by=popularity.desc`;
+                    }
                     
                     if (query.trim()) {
                         url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
@@ -2508,7 +2624,7 @@
                                     <div className="search-suggestions">
                                         {searchSuggestions.map((suggestion, index) => (
                                             <div
-                                                key={suggestion.id}
+                                                key={`${suggestion.type}-${suggestion.id}`}
                                                 className={`suggestion-item ${index === selectedSuggestionIndex ? 'selected' : ''}`}
                                                 onClick={() => selectSuggestion(suggestion)}
                                             >
@@ -2519,12 +2635,23 @@
                                                         className="suggestion-poster"
                                                     />
                                                 ) : (
-                                                    <div className="suggestion-poster-placeholder">🎬</div>
+                                                    <div className="suggestion-poster-placeholder">
+                                                        {suggestion.type === 'actor' ? '👤' : '🎬'}
+                                                    </div>
                                                 )}
                                                 <div className="suggestion-info">
-                                                    <div className="suggestion-title">{suggestion.title}</div>
-                                                    {suggestion.year && (
-                                                        <div className="suggestion-year">{suggestion.year}</div>
+                                                    <div className="suggestion-title">
+                                                        {suggestion.type === 'actor' && '🎭 '}
+                                                        {suggestion.title}
+                                                    </div>
+                                                    {suggestion.type === 'actor' ? (
+                                                        <div className="suggestion-year" style={{ fontSize: '0.8rem' }}>
+                                                            Known for: {suggestion.knownFor || suggestion.year}
+                                                        </div>
+                                                    ) : (
+                                                        suggestion.year && (
+                                                            <div className="suggestion-year">{suggestion.year}</div>
+                                                        )
                                                     )}
                                                 </div>
                                             </div>
@@ -2547,6 +2674,11 @@
                                 {LANGUAGES.map(lang => (
                                     <option key={lang.value} value={lang.value}>{lang.label}</option>
                                 ))}
+                            </select>
+                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                                <option value="popularity">Most Popular</option>
+                                <option value="new_releases">New Releases (6mo)</option>
+                                <option value="highest_rated">Highest Rated (7+)</option>
                             </select>
                             <button onClick={mode === 'local' ? searchMoviesLocal : searchMoviesOnline}>
                                 Search
