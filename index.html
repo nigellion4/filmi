@@ -1622,6 +1622,16 @@
                 width: 100%;
             }
         }
+
+        /* Sticky Submit Button */
+        .sticky-submit-button {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
     </style>
 </head>
 <body>
@@ -1796,6 +1806,20 @@
                     return () => sessionRef.off();
                 }
             }, [mode, screen, roomCode, hasLocalSearchResults]);
+
+            // Auto-search when filters change
+            useEffect(() => {
+                if (screen !== 'session') return;
+                
+                // Only trigger if at least one filter is set (not initial load)
+                if (selectedGenre || selectedDecade || selectedLanguage || sortBy !== 'popularity') {
+                    if (mode === 'local') {
+                        searchMoviesLocal();
+                    } else {
+                        searchMoviesOnline();
+                    }
+                }
+            }, [selectedGenre, selectedDecade, selectedLanguage, sortBy]);
 
             const fetchMovieDetails = async (movieId) => {
                 try {
@@ -3996,6 +4020,23 @@
                                                 )}
                                             </div>
                                             
+                                            {/* Sticky Submit Button at Bottom */}
+                                            {!hasUserSubmitted('ranked', currentUser) && (
+                                                <button 
+                                                    className="btn-primary sticky-submit-button"
+                                                    onClick={() => {
+                                                        submitRankedVotesLocal(currentUser);
+                                                        if (currentVoterIndex < localUsers.length - 1) {
+                                                            setCurrentVoterIndex(currentVoterIndex + 1);
+                                                        }
+                                                    }}
+                                                    style={{ background: 'var(--accent-gold)', color: '#000' }}
+                                                    disabled={!userVotes.first && !userVotes.second && !userVotes.third}
+                                                >
+                                                    ✅ Submit My Rankings
+                                                </button>
+                                            )}
+                                            
                                             {/* Ready to announce winner */}
                                             {getSubmittedCount('ranked') === localUsers.length && (
                                                 <div style={{ marginTop: '15px', padding: '15px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)', textAlign: 'center', fontWeight: 'bold' }}>
@@ -4036,6 +4077,18 @@
                                                     </div>
                                                 )}
                                             </div>
+                                            
+                                            {/* Sticky Submit Button at Bottom */}
+                                            {!hasUserSubmitted('ranked', userName) && (
+                                                <button 
+                                                    className="btn-primary sticky-submit-button"
+                                                    onClick={submitRankedVotesOnline}
+                                                    style={{ background: 'var(--accent-gold)', color: '#000' }}
+                                                    disabled={!userVotes.first && !userVotes.second && !userVotes.third}
+                                                >
+                                                    ✅ Submit My Rankings
+                                                </button>
+                                            )}
                                             
                                             {getSubmittedCount('ranked') === Object.keys(sessionData?.users || {}).length && (
                                                 <div style={{ marginTop: '15px', padding: '15px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)', textAlign: 'center', fontWeight: 'bold' }}>
