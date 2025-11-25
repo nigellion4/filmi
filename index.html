@@ -1003,6 +1003,12 @@
             border: 3px solid var(--accent-gold);
             box-shadow: 0 0 40px var(--glow), 0 8px 32px var(--shadow);
             animation: winner-glow 2s ease-in-out infinite;
+            transition: transform 0.3s ease;
+        }
+
+        .winner-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 60px var(--glow), 0 12px 48px var(--shadow);
         }
 
         @keyframes winner-glow {
@@ -1385,33 +1391,37 @@
             left: 0;
             right: 0;
             background: linear-gradient(180deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.85) 100%);
-            padding: 12px 20px;
+            padding: 15px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             z-index: 1001;
             border-bottom: 2px solid var(--accent-gold);
+            min-height: 70px;
         }
 
         .profile-login {
             display: flex;
-            gap: 10px;
+            gap: 15px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .profile-login input {
-            padding: 8px 15px;
+            padding: 10px 18px;
             border: 1px solid var(--accent-gold);
             background: rgba(0,0,0,0.7);
             color: var(--text-primary);
             border-radius: 4px;
             font-size: 0.95rem;
+            min-width: 200px;
         }
 
         .profile-header {
             display: flex;
-            gap: 15px;
+            gap: 20px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .profile-avatar {
@@ -1445,14 +1455,15 @@
         }
 
         .profile-btn {
-            padding: 8px 15px;
+            padding: 10px 20px;
             background: transparent;
             border: 1px solid var(--accent-gold);
             color: var(--accent-gold);
             cursor: pointer;
             border-radius: 4px;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             transition: all 0.3s;
+            white-space: nowrap;
         }
 
         .profile-btn:hover {
@@ -1597,21 +1608,32 @@
 
         @media (max-width: 768px) {
             .profile-bar {
-                padding: 10px 15px;
+                padding: 12px 15px;
+                min-height: 60px;
+                flex-wrap: wrap;
+            }
+
+            .profile-login {
+                gap: 10px;
             }
 
             .profile-login input {
-                width: 120px;
-                font-size: 0.85rem;
+                min-width: 150px;
+                font-size: 0.9rem;
+                padding: 8px 12px;
+            }
+
+            .profile-header {
+                gap: 12px;
             }
 
             .profile-btn {
-                padding: 6px 10px;
-                font-size: 0.8rem;
+                padding: 8px 12px;
+                font-size: 0.85rem;
             }
 
             .profile-screen {
-                padding: 70px 20px 20px;
+                padding: 80px 20px 20px;
             }
 
             .watchlist-tabs {
@@ -4204,7 +4226,12 @@
                                 <div className="results-section">
                                     <h2 className="results-header">🏆 Tonight's Winner</h2>
                                     
-                                    <div className="winner-card">
+                                    <div 
+                                        className="winner-card"
+                                        onClick={() => openMovieDetails(winner)}
+                                        style={{ cursor: 'pointer' }}
+                                        title="Click to see full details"
+                                    >
                                         <img
                                             src={winner.poster_path ? `${TMDB_IMAGE_BASE}${winner.poster_path}` : ''}
                                             alt={winner.title}
@@ -4212,6 +4239,21 @@
                                         />
                                         <h3 className="winner-title">{winner.title}</h3>
                                         <p className="winner-score">Score: {winner.score} points</p>
+                                        
+                                        <button 
+                                            className="btn-primary"
+                                            style={{ 
+                                                margin: '15px auto',
+                                                background: 'var(--accent-gold)',
+                                                color: '#000'
+                                            }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openMovieDetails(winner);
+                                            }}
+                                        >
+                                            📽️ View Full Details
+                                        </button>
                                         
                                         {winner.streamingProviders && (
                                             <div style={{ marginBottom: '20px' }}>
