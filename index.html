@@ -1962,6 +1962,7 @@
 
                 setLoading(true);
                 try {
+                    // Always use discover/movie for combined filtering
                     let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}`;
                     
                     // Handle sort by
@@ -1976,10 +1977,49 @@
                         url += `&sort_by=popularity.desc`;
                     }
                     
+                    // Add query as keyword search if provided
+                    // Note: For better results with text queries, we could search first then filter,
+                    // but this approach combines all filters in one request
                     if (query.trim()) {
-                        url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+                        // Use search endpoint if query is provided without other filters
+                        if (!selectedGenre && !selectedDecade && !selectedLanguage && sortBy === 'popularity') {
+                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+                        } else {
+                            // With other filters, we'll need to use discover with keyword
+                            // Note: TMDB discover doesn't support text search, so we search first, then filter results
+                            const searchResponse = await fetch(
+                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=1`
+                            );
+                            const searchData = await searchResponse.json();
+                            const searchIds = (searchData.results || []).map(m => m.id);
+                            
+                            // Now fetch with filters and filter to searched movie IDs
+                            const response = await fetch(url + 
+                                (selectedGenre ? `&with_genres=${selectedGenre}` : '') +
+                                (selectedDecade ? `&primary_release_date.gte=${selectedDecade.split('-')[0]}-01-01&primary_release_date.lte=${selectedDecade.split('-')[1]}-12-31` : '') +
+                                (selectedLanguage ? `&with_original_language=${selectedLanguage}` : '')
+                            );
+                            const data = await response.json();
+                            const movieList = (data.results || []).filter(m => searchIds.includes(m.id));
+                            
+                            const moviesWithProviders = [];
+                            for (const movie of movieList) {
+                                const providers = await fetchStreamingProviders(movie.id);
+                                moviesWithProviders.push({
+                                    ...movie,
+                                    streamingProviders: providers
+                                });
+                            }
+                            
+                            setMovies(moviesWithProviders);
+                            setCurrentPage(1);
+                            setHasMorePages(false); // Combined search doesn't support pagination well
+                            setLoading(false);
+                            return;
+                        }
                     }
                     
+                    // Add filters (when no query or query-only search)
                     if (selectedGenre) {
                         url += `&with_genres=${selectedGenre}`;
                     }
@@ -2022,6 +2062,7 @@
 
                 setLoading(true);
                 try {
+                    // Always use discover/movie for combined filtering
                     let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}`;
                     
                     // Handle sort by
@@ -2036,10 +2077,47 @@
                         url += `&sort_by=popularity.desc`;
                     }
                     
+                    // Add query as keyword search if provided
                     if (query.trim()) {
-                        url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+                        // Use search endpoint if query is provided without other filters
+                        if (!selectedGenre && !selectedDecade && !selectedLanguage && sortBy === 'popularity') {
+                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+                        } else {
+                            // With other filters, search first then filter results
+                            const searchResponse = await fetch(
+                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=1`
+                            );
+                            const searchData = await searchResponse.json();
+                            const searchIds = (searchData.results || []).map(m => m.id);
+                            
+                            // Now fetch with filters and filter to searched movie IDs
+                            const response = await fetch(url + 
+                                (selectedGenre ? `&with_genres=${selectedGenre}` : '') +
+                                (selectedDecade ? `&primary_release_date.gte=${selectedDecade.split('-')[0]}-01-01&primary_release_date.lte=${selectedDecade.split('-')[1]}-12-31` : '') +
+                                (selectedLanguage ? `&with_original_language=${selectedLanguage}` : '')
+                            );
+                            const data = await response.json();
+                            const movieList = (data.results || []).filter(m => searchIds.includes(m.id));
+                            
+                            const moviesWithProviders = [];
+                            for (const movie of movieList) {
+                                const providers = await fetchStreamingProviders(movie.id);
+                                moviesWithProviders.push({
+                                    ...movie,
+                                    streamingProviders: providers
+                                });
+                            }
+                            
+                            setMovies(moviesWithProviders);
+                            setCurrentPage(1);
+                            setHasMorePages(false);
+                            setHasLocalSearchResults(true);
+                            setLoading(false);
+                            return;
+                        }
                     }
                     
+                    // Add filters (when no query or query-only search)
                     if (selectedGenre) {
                         url += `&with_genres=${selectedGenre}`;
                     }
@@ -2312,6 +2390,25 @@
                     }))
                     .sort((a, b) => b.score - a.score);
             };
+
+            const getVotingBreakdown = (movieId) => {
+                // Get who voted for this movie and at what rank
+                const rankedVotes = mode === 'local' ? localRankedVotes : sessionData?.rankedVotes || {};
+                const breakdown = {
+                    first: [],
+                    second: [],
+                    third: []
+                };
+
+                Object.entries(rankedVotes).forEach(([userName, votes]) => {
+                    if (votes.first === movieId) breakdown.first.push(userName);
+                    if (votes.second === movieId) breakdown.second.push(userName);
+                    if (votes.third === movieId) breakdown.third.push(userName);
+                });
+
+                return breakdown;
+            };
+
             const users = mode === 'local' 
                 ? localUsers 
                 : (sessionData?.users ? Object.values(sessionData.users) : []);
@@ -3325,25 +3422,81 @@
                                         )}
                                         
                                         <p>{winner.overview}</p>
+                                        
+                                        {/* Voting Breakdown */}
+                                        {(() => {
+                                            const breakdown = getVotingBreakdown(winner.id);
+                                            const hasVotes = breakdown.first.length > 0 || breakdown.second.length > 0 || breakdown.third.length > 0;
+                                            
+                                            if (hasVotes) {
+                                                return (
+                                                    <div style={{ 
+                                                        marginTop: '30px', 
+                                                        padding: '20px', 
+                                                        background: 'rgba(218, 165, 32, 0.1)',
+                                                        border: '1px solid var(--accent-gold)',
+                                                        borderRadius: '8px'
+                                                    }}>
+                                                        <h4 style={{ 
+                                                            color: 'var(--accent-gold)', 
+                                                            marginBottom: '15px',
+                                                            fontFamily: "'Bebas Neue', sans-serif",
+                                                            fontSize: '1.3rem',
+                                                            letterSpacing: '0.1em'
+                                                        }}>
+                                                            🗳️ VOTING BREAKDOWN
+                                                        </h4>
+                                                        {breakdown.first.length > 0 && (
+                                                            <div style={{ marginBottom: '10px' }}>
+                                                                <span style={{ color: '#FFD700', fontWeight: 'bold' }}>🥇 1st Choice ({RANKED_VOTE_POINTS.first} pts): </span>
+                                                                <span style={{ color: '#e0e0e0' }}>{breakdown.first.join(', ')}</span>
+                                                            </div>
+                                                        )}
+                                                        {breakdown.second.length > 0 && (
+                                                            <div style={{ marginBottom: '10px' }}>
+                                                                <span style={{ color: '#C0C0C0', fontWeight: 'bold' }}>🥈 2nd Choice ({RANKED_VOTE_POINTS.second} pts): </span>
+                                                                <span style={{ color: '#e0e0e0' }}>{breakdown.second.join(', ')}</span>
+                                                            </div>
+                                                        )}
+                                                        {breakdown.third.length > 0 && (
+                                                            <div>
+                                                                <span style={{ color: '#CD7F32', fontWeight: 'bold' }}>🥉 3rd Choice ({RANKED_VOTE_POINTS.third} pt): </span>
+                                                                <span style={{ color: '#e0e0e0' }}>{breakdown.third.join(', ')}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                     </div>
 
                                     {rankedResults.length > 1 && (
                                         <div className="ranked-list">
                                             <h3 className="search-header">Final Results</h3>
-                                            {rankedResults.map((movie, index) => (
-                                                <div key={movie.id} className="ranked-item">
-                                                    <div className="rank-number">#{index + 1}</div>
-                                                    <img
-                                                        src={movie.poster_path ? `${TMDB_IMAGE_BASE}${movie.poster_path}` : ''}
-                                                        alt={movie.title}
-                                                        className="ranked-poster"
-                                                    />
-                                                    <div className="ranked-info">
-                                                        <div className="ranked-title">{movie.title}</div>
-                                                        <div className="ranked-score">{movie.score} points</div>
+                                            {rankedResults.map((movie, index) => {
+                                                const breakdown = getVotingBreakdown(movie.id);
+                                                return (
+                                                    <div key={movie.id} className="ranked-item">
+                                                        <div className="rank-number">#{index + 1}</div>
+                                                        <img
+                                                            src={movie.poster_path ? `${TMDB_IMAGE_BASE}${movie.poster_path}` : ''}
+                                                            alt={movie.title}
+                                                            className="ranked-poster"
+                                                        />
+                                                        <div className="ranked-info">
+                                                            <div className="ranked-title">{movie.title}</div>
+                                                            <div className="ranked-score">{movie.score} points</div>
+                                                            {/* Show voting breakdown */}
+                                                            <div style={{ fontSize: '0.85rem', marginTop: '5px', color: '#b0b0b0' }}>
+                                                                {breakdown.first.length > 0 && <div>🥇 {breakdown.first.join(', ')}</div>}
+                                                                {breakdown.second.length > 0 && <div>🥈 {breakdown.second.join(', ')}</div>}
+                                                                {breakdown.third.length > 0 && <div>🥉 {breakdown.third.join(', ')}</div>}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
