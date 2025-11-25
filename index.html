@@ -2569,30 +2569,90 @@
                                     {selectedMovie.streamingProviders && (
                                         <div className="modal-section">
                                             <div className="modal-section-title">Where to Watch</div>
-                                            <div className="streaming-info">
-                                                {selectedMovie.streamingProviders.flatrate?.length > 0 && (
-                                                    <>
+                                            
+                                            {selectedMovie.streamingProviders.flatrate?.length > 0 && (
+                                                <div style={{ marginBottom: '15px' }}>
+                                                    <div style={{ 
+                                                        fontSize: '0.9rem', 
+                                                        color: 'var(--accent-gold)', 
+                                                        marginBottom: '8px',
+                                                        fontWeight: 'bold'
+                                                    }}>
+                                                        🎬 Free with Subscription:
+                                                    </div>
+                                                    <div className="streaming-info">
                                                         {selectedMovie.streamingProviders.flatrate.map(provider => (
                                                             <div key={provider.provider_id} className="streaming-badge">
                                                                 {provider.provider_name}
                                                             </div>
                                                         ))}
-                                                    </>
-                                                )}
-                                                {selectedMovie.streamingProviders.rent?.length > 0 && !selectedMovie.streamingProviders.flatrate?.length && (
-                                                    <>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {selectedMovie.streamingProviders.rent?.length > 0 && (
+                                                <div style={{ marginBottom: '15px' }}>
+                                                    <div style={{ 
+                                                        fontSize: '0.9rem', 
+                                                        color: '#ff6b6b', 
+                                                        marginBottom: '8px',
+                                                        fontWeight: 'bold'
+                                                    }}>
+                                                        💰 Rent or Buy:
+                                                    </div>
+                                                    <div className="streaming-info">
                                                         {selectedMovie.streamingProviders.rent.map(provider => (
                                                             <div 
                                                                 key={provider.provider_id} 
                                                                 className="streaming-badge"
-                                                                style={{ background: 'var(--accent-gold)' }}
+                                                                style={{ background: '#ff6b6b' }}
                                                             >
                                                                 {provider.provider_name}
                                                             </div>
                                                         ))}
-                                                    </>
-                                                )}
-                                            </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {selectedMovie.streamingProviders.buy?.length > 0 && 
+                                             !selectedMovie.streamingProviders.rent?.some(r => 
+                                                selectedMovie.streamingProviders.buy.some(b => b.provider_id === r.provider_id)
+                                             ) && (
+                                                <div>
+                                                    <div style={{ 
+                                                        fontSize: '0.9rem', 
+                                                        color: '#ffa500', 
+                                                        marginBottom: '8px',
+                                                        fontWeight: 'bold'
+                                                    }}>
+                                                        🛒 Buy Only:
+                                                    </div>
+                                                    <div className="streaming-info">
+                                                        {selectedMovie.streamingProviders.buy
+                                                            .filter(buyProvider => 
+                                                                !selectedMovie.streamingProviders.rent?.some(r => r.provider_id === buyProvider.provider_id)
+                                                            )
+                                                            .map(provider => (
+                                                                <div 
+                                                                    key={provider.provider_id} 
+                                                                    className="streaming-badge"
+                                                                    style={{ background: '#ffa500' }}
+                                                                >
+                                                                    {provider.provider_name}
+                                                                </div>
+                                                            ))
+                                                        }
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {!selectedMovie.streamingProviders.flatrate?.length && 
+                                             !selectedMovie.streamingProviders.rent?.length && 
+                                             !selectedMovie.streamingProviders.buy?.length && (
+                                                <div style={{ color: '#888', fontStyle: 'italic' }}>
+                                                    Not currently available for streaming in the US
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -3050,26 +3110,73 @@
                                                         <div className="streaming-info">
                                                             {movie.streamingProviders.flatrate?.length > 0 && (
                                                                 <>
-                                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '5px', width: '100%' }}>
-                                                                        Stream on:
+                                                                    <div style={{ 
+                                                                        fontSize: '0.75rem', 
+                                                                        color: 'var(--accent-gold)', 
+                                                                        marginBottom: '5px', 
+                                                                        width: '100%',
+                                                                        fontWeight: 'bold'
+                                                                    }}>
+                                                                        🎬 Free with subscription:
                                                                     </div>
                                                                     {movie.streamingProviders.flatrate.slice(0, 4).map(provider => (
                                                                         <div key={provider.provider_id} className="streaming-badge" title={provider.provider_name}>
                                                                             {provider.provider_name}
                                                                         </div>
                                                                     ))}
+                                                                    {movie.streamingProviders.flatrate.length > 4 && (
+                                                                        <div className="streaming-badge" style={{ opacity: 0.7 }}>
+                                                                            +{movie.streamingProviders.flatrate.length - 4} more
+                                                                        </div>
+                                                                    )}
                                                                 </>
                                                             )}
                                                             {movie.streamingProviders.rent?.length > 0 && !movie.streamingProviders.flatrate?.length && (
                                                                 <>
-                                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '5px', width: '100%' }}>
-                                                                        Rent/Buy:
+                                                                    <div style={{ 
+                                                                        fontSize: '0.75rem', 
+                                                                        color: '#ff6b6b', 
+                                                                        marginBottom: '5px', 
+                                                                        width: '100%',
+                                                                        fontWeight: 'bold'
+                                                                    }}>
+                                                                        💰 Rent or Buy:
                                                                     </div>
                                                                     {movie.streamingProviders.rent.slice(0, 3).map(provider => (
-                                                                        <div key={provider.provider_id} className="streaming-badge" style={{ background: 'var(--accent-gold)' }} title={provider.provider_name}>
+                                                                        <div key={provider.provider_id} className="streaming-badge" style={{ background: '#ff6b6b' }} title={provider.provider_name}>
                                                                             {provider.provider_name}
                                                                         </div>
                                                                     ))}
+                                                                    {movie.streamingProviders.rent.length > 3 && (
+                                                                        <div className="streaming-badge" style={{ background: '#ff6b6b', opacity: 0.7 }}>
+                                                                            +{movie.streamingProviders.rent.length - 3} more
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                            {movie.streamingProviders.buy?.length > 0 && 
+                                                             !movie.streamingProviders.flatrate?.length && 
+                                                             !movie.streamingProviders.rent?.length && (
+                                                                <>
+                                                                    <div style={{ 
+                                                                        fontSize: '0.75rem', 
+                                                                        color: '#ffa500', 
+                                                                        marginBottom: '5px', 
+                                                                        width: '100%',
+                                                                        fontWeight: 'bold'
+                                                                    }}>
+                                                                        🛒 Buy only:
+                                                                    </div>
+                                                                    {movie.streamingProviders.buy.slice(0, 3).map(provider => (
+                                                                        <div key={provider.provider_id} className="streaming-badge" style={{ background: '#ffa500' }} title={provider.provider_name}>
+                                                                            {provider.provider_name}
+                                                                        </div>
+                                                                    ))}
+                                                                    {movie.streamingProviders.buy.length > 3 && (
+                                                                        <div className="streaming-badge" style={{ background: '#ffa500', opacity: 0.7 }}>
+                                                                            +{movie.streamingProviders.buy.length - 3} more
+                                                                        </div>
+                                                                    )}
                                                                 </>
                                                             )}
                                                         </div>
