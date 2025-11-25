@@ -738,6 +738,80 @@
             padding: 12px 20px;
         }
 
+        .search-input-container {
+            position: relative;
+        }
+
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border: 2px solid var(--accent-gold);
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 8px 32px var(--shadow);
+        }
+
+        .suggestion-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-bottom: 1px solid rgba(255, 179, 87, 0.1);
+        }
+
+        .suggestion-item:hover,
+        .suggestion-item.selected {
+            background: var(--accent-gold);
+            color: var(--bg-primary);
+        }
+
+        .suggestion-poster {
+            width: 40px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .suggestion-poster-placeholder {
+            width: 40px;
+            height: 60px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .suggestion-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .suggestion-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .suggestion-year {
+            font-size: 0.85rem;
+            opacity: 0.7;
+            margin-top: 2px;
+        }
+
         .movie-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -1437,10 +1511,15 @@
             // Shared state
             const [movies, setMovies] = useState([]);
             const [searchQuery, setSearchQuery] = useState('');
+            const [searchSuggestions, setSearchSuggestions] = useState([]);
+            const [showSuggestions, setShowSuggestions] = useState(false);
+            const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
             const [selectedGenre, setSelectedGenre] = useState('');
             const [selectedDecade, setSelectedDecade] = useState('');
             const [selectedLanguage, setSelectedLanguage] = useState('');
             const [loading, setLoading] = useState(false);
+            const [currentPage, setCurrentPage] = useState(1);
+            const [hasMorePages, setHasMorePages] = useState(true);
             const [selectedMovie, setSelectedMovie] = useState(null);
             const [movieDetails, setMovieDetails] = useState(null);
 
@@ -1487,6 +1566,56 @@
                 } catch (error) {
                     console.error('Error fetching movie details:', error);
                     return null;
+                }
+            };
+
+            // Autocomplete search with debounce
+            const fetchSearchSuggestions = async (query) => {
+                if (!query || query.length < 2) {
+                    setSearchSuggestions([]);
+                    return;
+                }
+
+                try {
+                    const response = await fetch(
+                        `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=1`
+                    );
+                    const data = await response.json();
+                    const suggestions = (data.results || []).slice(0, 8).map(movie => ({
+                        id: movie.id,
+                        title: movie.title,
+                        year: movie.release_date?.split('-')[0],
+                        poster: movie.poster_path
+                    }));
+                    setSearchSuggestions(suggestions);
+                } catch (error) {
+                    console.error('Error fetching suggestions:', error);
+                    setSearchSuggestions([]);
+                }
+            };
+
+            // Debounce timer
+            let searchTimeout;
+            const handleSearchInput = (value) => {
+                setSearchQuery(value);
+                setShowSuggestions(true);
+                setSelectedSuggestionIndex(-1);
+                
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    fetchSearchSuggestions(value);
+                }, 300); // Wait 300ms after user stops typing
+            };
+
+            const selectSuggestion = (suggestion) => {
+                setSearchQuery(suggestion.title);
+                setShowSuggestions(false);
+                setSearchSuggestions([]);
+                // Trigger search with selected title
+                if (mode === 'local') {
+                    searchMoviesLocal(suggestion.title);
+                } else {
+                    searchMoviesOnline(suggestion.title);
                 }
             };
 
@@ -1537,6 +1666,8 @@
                         rankedVotes: {},         // {userName: {first: movieId, second: movieId, third: movieId}}
                         rankedSubmitted: {},     // {userName: true} - who submitted ranked votes
                         votingPhase: VOTING_PHASES.BROWSING,
+                        currentPage: 1,
+                        hasMorePages: true,
                         largeGroupMode: false,   // Toggle for 1 vs 3 favorites
                         movies: {},
                         createdAt: Date.now()
@@ -1635,11 +1766,11 @@
                 setLocalRankedVotes(newRankedVotes);
             };
 
-            const fetchPopularMoviesLocal = async () => {
+            const fetchPopularMoviesLocal = async (page = 1, append = false) => {
                 setLoading(true);
                 try {
                     const response = await fetch(
-                        `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=1`
+                        `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${page}`
                     );
                     const data = await response.json();
                     const movieList = data.results || [];
@@ -1654,18 +1785,20 @@
                         });
                     }
                     
-                    setMovies(moviesWithProviders);
+                    setMovies(append ? [...movies, ...moviesWithProviders] : moviesWithProviders);
+                    setCurrentPage(page);
+                    setHasMorePages(page < data.total_pages);
                 } catch (error) {
                     console.error('Error fetching movies:', error);
                 }
                 setLoading(false);
             };
 
-            const fetchPopularMoviesOnline = async (code) => {
+            const fetchPopularMoviesOnline = async (code, page = 1, append = false) => {
                 setLoading(true);
                 try {
                     const response = await fetch(
-                        `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=1`
+                        `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${page}`
                     );
                     const data = await response.json();
                     const movieList = data.results || [];
@@ -1681,7 +1814,13 @@
                             };
                         }
                         
-                        await database.ref(`sessions/${code}/movies`).set(moviesObj);
+                        if (append) {
+                            await database.ref(`sessions/${code}/movies`).update(moviesObj);
+                        } else {
+                            await database.ref(`sessions/${code}/movies`).set(moviesObj);
+                        }
+                        await database.ref(`sessions/${code}/currentPage`).set(page);
+                        await database.ref(`sessions/${code}/hasMorePages`).set(page < data.total_pages);
                     }
                 } catch (error) {
                     console.error('Error fetching movies:', error);
@@ -1689,8 +1828,19 @@
                 setLoading(false);
             };
 
-            const searchMoviesLocal = async () => {
-                if (!searchQuery.trim() && !selectedGenre && !selectedDecade && !selectedLanguage) {
+            const loadMoreMovies = () => {
+                if (mode === 'local') {
+                    fetchPopularMoviesLocal(currentPage + 1, true);
+                } else if (mode === 'online') {
+                    fetchPopularMoviesOnline(roomCode, (sessionData?.currentPage || 1) + 1, true);
+                }
+            };
+
+            const searchMoviesLocal = async (customQuery = null) => {
+                const query = customQuery || searchQuery;
+                setShowSuggestions(false); // Hide suggestions when searching
+                
+                if (!query.trim() && !selectedGenre && !selectedDecade && !selectedLanguage) {
                     fetchPopularMoviesLocal();
                     return;
                 }
@@ -1699,8 +1849,8 @@
                 try {
                     let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&sort_by=popularity.desc`;
                     
-                    if (searchQuery.trim()) {
-                        url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(searchQuery)}`;
+                    if (query.trim()) {
+                        url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
                     }
                     
                     if (selectedGenre) {
@@ -1730,19 +1880,24 @@
                     }
                     
                     setMovies(moviesWithProviders);
+                    setCurrentPage(1);
+                    setHasMorePages(data.total_pages > 1);
                 } catch (error) {
                     console.error('Error searching movies:', error);
                 }
                 setLoading(false);
             };
 
-            const searchMoviesOnline = async () => {
+            const searchMoviesOnline = async (customQuery = null) => {
                 if (!firebaseInitialized) {
                     setError('Firebase is not available for searching.');
                     return;
                 }
 
-                if (!searchQuery.trim() && !selectedGenre && !selectedDecade && !selectedLanguage) {
+                const query = customQuery || searchQuery;
+                setShowSuggestions(false); // Hide suggestions when searching
+
+                if (!query.trim() && !selectedGenre && !selectedDecade && !selectedLanguage) {
                     fetchPopularMoviesOnline(roomCode);
                     return;
                 }
@@ -1751,8 +1906,8 @@
                 try {
                     let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&sort_by=popularity.desc`;
                     
-                    if (searchQuery.trim()) {
-                        url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(searchQuery)}`;
+                    if (query.trim()) {
+                        url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
                     }
                     
                     if (selectedGenre) {
@@ -1783,6 +1938,8 @@
                     }
                     
                     await database.ref(`sessions/${roomCode}/movies`).set(moviesObj);
+                    await database.ref(`sessions/${roomCode}/currentPage`).set(1);
+                    await database.ref(`sessions/${roomCode}/hasMorePages`).set(data.total_pages > 1);
                 } catch (error) {
                     console.error('Error searching movies:', error);
                 }
@@ -2322,13 +2479,59 @@
                     <div className="search-section">
                         <h2 className="search-header">Find Your Film</h2>
                         <div className="search-filters">
-                            <input
-                                type="text"
-                                placeholder="Search movies..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && (mode === 'local' ? searchMoviesLocal() : searchMoviesOnline())}
-                            />
+                            <div className="search-input-container">
+                                <input
+                                    type="text"
+                                    placeholder="Search movies..."
+                                    value={searchQuery}
+                                    onChange={(e) => handleSearchInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            mode === 'local' ? searchMoviesLocal() : searchMoviesOnline();
+                                        } else if (e.key === 'ArrowDown' && searchSuggestions.length > 0) {
+                                            e.preventDefault();
+                                            setSelectedSuggestionIndex(Math.min(selectedSuggestionIndex + 1, searchSuggestions.length - 1));
+                                        } else if (e.key === 'ArrowUp' && searchSuggestions.length > 0) {
+                                            e.preventDefault();
+                                            setSelectedSuggestionIndex(Math.max(selectedSuggestionIndex - 1, -1));
+                                        } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+                                            selectSuggestion(searchSuggestions[selectedSuggestionIndex]);
+                                        } else if (e.key === 'Escape') {
+                                            setShowSuggestions(false);
+                                        }
+                                    }}
+                                    onFocus={() => searchQuery.length >= 2 && setShowSuggestions(true)}
+                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                    autoComplete="off"
+                                />
+                                {showSuggestions && searchSuggestions.length > 0 && (
+                                    <div className="search-suggestions">
+                                        {searchSuggestions.map((suggestion, index) => (
+                                            <div
+                                                key={suggestion.id}
+                                                className={`suggestion-item ${index === selectedSuggestionIndex ? 'selected' : ''}`}
+                                                onClick={() => selectSuggestion(suggestion)}
+                                            >
+                                                {suggestion.poster ? (
+                                                    <img
+                                                        src={`${TMDB_IMAGE_BASE}${suggestion.poster}`}
+                                                        alt={suggestion.title}
+                                                        className="suggestion-poster"
+                                                    />
+                                                ) : (
+                                                    <div className="suggestion-poster-placeholder">🎬</div>
+                                                )}
+                                                <div className="suggestion-info">
+                                                    <div className="suggestion-title">{suggestion.title}</div>
+                                                    {suggestion.year && (
+                                                        <div className="suggestion-year">{suggestion.year}</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                             <select value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)}>
                                 <option value="">All Genres</option>
                                 {Object.entries(GENRES).map(([id, name]) => (
@@ -2617,6 +2820,33 @@
                                         );
                                     })}
                                 </div>
+                                
+                                {/* Load More Button */}
+                                {(mode === 'local' ? hasMorePages : sessionData?.hasMorePages !== false) && (
+                                    <div style={{ display: 'flex', justifyContent: 'center', margin: '30px 0' }}>
+                                        <button 
+                                            onClick={loadMoreMovies}
+                                            disabled={loading}
+                                            style={{
+                                                padding: '15px 40px',
+                                                fontSize: '1.1rem',
+                                                background: loading ? 'var(--bg-secondary)' : 'var(--accent-gold)',
+                                                color: 'var(--bg-primary)',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                cursor: loading ? 'not-allowed' : 'pointer',
+                                                fontFamily: "'Bebas Neue', sans-serif",
+                                                letterSpacing: '0.1em',
+                                                transition: 'all 0.3s ease',
+                                                opacity: loading ? 0.6 : 1
+                                            }}
+                                            onMouseEnter={(e) => !loading && (e.target.style.transform = 'translateY(-2px)')}
+                                            onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+                                        >
+                                            {loading ? '⏳ Loading...' : '🎬 Load More Movies'}
+                                        </button>
+                                    </div>
+                                )}
                                 </>
                             );
                         }
