@@ -1398,6 +1398,34 @@
             z-index: 1001;
             border-bottom: 2px solid var(--accent-gold);
             min-height: 70px;
+            transition: all 0.3s ease;
+        }
+
+        .profile-bar.compact {
+            padding: 8px 20px;
+            min-height: 50px;
+        }
+
+        .profile-bar.compact .profile-avatar,
+        .profile-bar.compact .profile-avatar-placeholder {
+            width: 32px;
+            height: 32px;
+            font-size: 1rem;
+        }
+
+        .profile-bar.compact .profile-name {
+            font-size: 0.9rem;
+        }
+
+        .profile-bar.compact .profile-btn {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        .profile-bar.compact .profile-login input {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            min-width: 160px;
         }
 
         .profile-login {
@@ -1766,6 +1794,7 @@
         function App() {
             const [mode, setMode] = useState(''); // 'local' or 'online'
             const [screen, setScreen] = useState('lobby'); // 'lobby', 'session', 'profile'
+            const [isScrolled, setIsScrolled] = useState(false);
             
             // User Profile & Watchlist System
             const [userProfile, setUserProfile] = useState(null); // { username, watchlist: { movieId: 'seen'/'want' }, photo: base64 }
@@ -1842,6 +1871,16 @@
                     }
                 }
             }, [selectedGenre, selectedDecade, selectedLanguage, sortBy]);
+
+            // Detect scroll for shrinking profile bar
+            useEffect(() => {
+                const handleScroll = () => {
+                    setIsScrolled(window.scrollY > 20);
+                };
+
+                window.addEventListener('scroll', handleScroll);
+                return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
 
             const fetchMovieDetails = async (movieId) => {
                 try {
@@ -2808,7 +2847,7 @@
                 return (
                     <>
                         {/* Profile Bar */}
-                        <div className="profile-bar">
+                        <div className={`profile-bar ${isScrolled ? 'compact' : ''}`}>
                             {!userProfile ? (
                                 <div className="profile-login">
                                     <input
@@ -2866,7 +2905,7 @@
                             </div>
                         </div>
 
-                        <div className="app-container" style={{ paddingTop: '70px' }}>
+                        <div className="app-container" style={{ paddingTop: isScrolled ? '50px' : '70px', transition: 'padding-top 0.3s ease' }}>
                         <div className="header">
                             <div className="marquee-lights">
                                 <div className="light"></div>
@@ -2973,7 +3012,7 @@
                 return (
                     <>
                         {/* Profile Bar */}
-                        <div className="profile-bar">
+                        <div className={`profile-bar ${isScrolled ? 'compact' : ''}`}>
                             <div className="profile-header">
                                 {userProfile.photo ? (
                                     <img
@@ -3162,7 +3201,7 @@
             return (
                 <>
                     {/* Profile Bar */}
-                    <div className="profile-bar">
+                    <div className={`profile-bar ${isScrolled ? 'compact' : ''}`}>
                         {!userProfile ? (
                             <div className="profile-login">
                                 <input
@@ -3581,7 +3620,7 @@
                         </div>
                     </div>
 
-                    <div style={{ paddingTop: '70px' }}>
+                    <div style={{ paddingTop: isScrolled ? '50px' : '70px', transition: 'padding-top 0.3s ease' }}>
                     {/* Phase Banner */}
                     {(() => {
                         const currentPhase = mode === 'local' ? localVotingPhase : sessionData?.votingPhase;
