@@ -2693,10 +2693,22 @@
             };
 
             const loadMoreMovies = () => {
+                if (loading) return; // Prevent double-loading
+                
                 if (mode === 'local') {
-                    fetchPopularMoviesLocal(currentPage + 1, true);
+                    // If we have a search query or filters, load more with those
+                    if (searchQuery || selectedGenre || selectedDecade || selectedLanguage || sortBy !== 'popularity') {
+                        searchMoviesLocal(searchQuery, currentPage + 1, true);
+                    } else {
+                        fetchPopularMoviesLocal(currentPage + 1, true);
+                    }
                 } else if (mode === 'online') {
-                    fetchPopularMoviesOnline(roomCode, (sessionData?.currentPage || 1) + 1, true);
+                    // In online mode, check if host has search results
+                    if (hasLocalSearchResults) {
+                        searchMoviesOnline(searchQuery, currentPage + 1, true);
+                    } else {
+                        fetchPopularMoviesOnline(roomCode, (sessionData?.currentPage || 1) + 1, true);
+                    }
                 }
             };
 
@@ -2728,7 +2740,7 @@
                 }
             };
 
-            const searchMoviesLocal = async (customQuery = null) => {
+            const searchMoviesLocal = async (customQuery = null, page = 1, append = false) => {
                 const query = customQuery || searchQuery;
                 setShowSuggestions(false); // Hide suggestions when searching
                 
@@ -2740,7 +2752,7 @@
                 setLoading(true);
                 try {
                     // Always use discover/movie for combined filtering
-                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}`;
+                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&page=${page}`;
                     
                     // Handle sort by
                     if (sortBy === 'new_releases') {
@@ -2755,17 +2767,14 @@
                     }
                     
                     // Add query as keyword search if provided
-                    // Note: For better results with text queries, we could search first then filter,
-                    // but this approach combines all filters in one request
                     if (query.trim()) {
                         // Use search endpoint if query is provided without other filters
                         if (!selectedGenre && !selectedDecade && !selectedLanguage && sortBy === 'popularity') {
-                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=${page}`;
                         } else {
-                            // With other filters, we'll need to use discover with keyword
-                            // Note: TMDB discover doesn't support text search, so we search first, then filter results
+                            // With other filters, search then filter (pagination supported!)
                             const searchResponse = await fetch(
-                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=1`
+                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=${page}`
                             );
                             const searchData = await searchResponse.json();
                             const searchIds = (searchData.results || []).map(m => m.id);
@@ -2788,9 +2797,10 @@
                                 });
                             }
                             
-                            setMovies(moviesWithProviders);
-                            setCurrentPage(1);
-                            setHasMorePages(false); // Combined search doesn't support pagination well
+                            setMovies(append ? [...movies, ...moviesWithProviders] : moviesWithProviders);
+                            setCurrentPage(page);
+                            setHasMorePages(searchData.page < searchData.total_pages && movieList.length > 0);
+                            setHasLocalSearchResults(true);
                             setLoading(false);
                             return;
                         }
@@ -2823,16 +2833,17 @@
                         });
                     }
                     
-                    setMovies(moviesWithProviders);
-                    setCurrentPage(1);
-                    setHasMorePages(data.total_pages > 1);
+                    setMovies(append ? [...movies, ...moviesWithProviders] : moviesWithProviders);
+                    setCurrentPage(page);
+                    setHasMorePages(data.page < data.total_pages);
+                    setHasLocalSearchResults(true);
                 } catch (error) {
                     console.error('Error searching movies:', error);
                 }
                 setLoading(false);
             };
 
-            const searchMoviesOnline = async (customQuery = null) => {
+            const searchMoviesOnline = async (customQuery = null, page = 1, append = false) => {
                 // Search results are LOCAL to each user - don't sync to Firebase
                 const query = customQuery || searchQuery;
                 setShowSuggestions(false); // Hide suggestions when searching
@@ -2840,7 +2851,7 @@
                 setLoading(true);
                 try {
                     // Always use discover/movie for combined filtering
-                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}`;
+                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&page=${page}`;
                     
                     // Handle sort by
                     if (sortBy === 'new_releases') {
@@ -2858,11 +2869,11 @@
                     if (query.trim()) {
                         // Use search endpoint if query is provided without other filters
                         if (!selectedGenre && !selectedDecade && !selectedLanguage && sortBy === 'popularity') {
-                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=${page}`;
                         } else {
                             // With other filters, search first then filter results
                             const searchResponse = await fetch(
-                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=1`
+                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=${page}`
                             );
                             const searchData = await searchResponse.json();
                             const searchIds = (searchData.results || []).map(m => m.id);
@@ -2885,9 +2896,9 @@
                                 });
                             }
                             
-                            setMovies(moviesWithProviders);
-                            setCurrentPage(1);
-                            setHasMorePages(false);
+                            setMovies(append ? [...movies, ...moviesWithProviders] : moviesWithProviders);
+                            setCurrentPage(page);
+                            setHasMorePages(searchData.page < searchData.total_pages && movieList.length > 0);
                             setHasLocalSearchResults(true);
                             setLoading(false);
                             return;
@@ -2922,9 +2933,9 @@
                     }
                     
                     // Store locally, don't sync to Firebase
-                    setMovies(moviesWithProviders);
-                    setCurrentPage(1);
-                    setHasMorePages(data.total_pages > 1);
+                    setMovies(append ? [...movies, ...moviesWithProviders] : moviesWithProviders);
+                    setCurrentPage(page);
+                    setHasMorePages(data.page < data.total_pages);
                     setHasLocalSearchResults(true); // Mark as local search
                 } catch (error) {
                     console.error('Error searching movies:', error);
@@ -4238,11 +4249,40 @@
                             <button onClick={mode === 'local' ? searchMoviesLocal : searchMoviesOnline}>
                                 🔍 Search
                             </button>
+                            
+                            {/* Clear Search button - shows when actively searching */}
+                            {searchQuery && (
+                                <button 
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setShowSuggestions(false);
+                                        setSearchSuggestions([]);
+                                        // Don't reset filters, just clear search query
+                                        if (selectedGenre || selectedDecade || selectedLanguage || sortBy !== 'popularity' || selectedRuntime || selectedRating || minImdbRating > 0) {
+                                            // Re-search with filters but no query
+                                            if (mode === 'local') {
+                                                searchMoviesLocal('');
+                                            } else {
+                                                searchMoviesOnline('');
+                                            }
+                                        } else {
+                                            // No filters, go back to popular
+                                            resetToHome();
+                                        }
+                                    }}
+                                    style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                    title="Clear search query"
+                                >
+                                    ✕ Clear Search
+                                </button>
+                            )}
+                            
+                            {/* Home button - shows when any filter/search is active */}
                             {(searchQuery || selectedGenre || selectedDecade || selectedLanguage !== '' || sortBy !== 'popularity' || selectedRuntime || selectedRating || minImdbRating > 0 || hasLocalSearchResults) && (
                                 <button 
                                     onClick={resetToHome}
-                                    style={{ background: 'var(--accent-red)' }}
-                                    title="Reset to popular movies"
+                                    style={{ background: 'var(--accent-gold)', color: '#000' }}
+                                    title="Reset all filters and return to popular movies"
                                 >
                                     🏠 Home
                                 </button>
