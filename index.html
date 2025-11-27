@@ -2314,6 +2314,15 @@
                 setShowSuggestions(false);
                 setSearchSuggestions([]);
                 
+                // When selecting a suggestion, clear filters (search overrides filters)
+                setSelectedGenre('');
+                setSelectedDecade('');
+                setSelectedLanguage('');
+                setSortBy('popularity');
+                setSelectedRuntime('');
+                setSelectedRating('');
+                setMinImdbRating(0);
+                
                 if (suggestion.type === 'actor') {
                     // Search for movies with this actor
                     setSearchQuery(suggestion.title);
@@ -4284,50 +4293,36 @@
                             </select>
                             
                             <button onClick={() => {
+                                // When searching by text, clear all filters first (search overrides filters)
+                                if (searchQuery.trim()) {
+                                    // Clear filters
+                                    setSelectedGenre('');
+                                    setSelectedDecade('');
+                                    setSelectedLanguage('');
+                                    setSortBy('popularity');
+                                    setSelectedRuntime('');
+                                    setSelectedRating('');
+                                    setMinImdbRating(0);
+                                }
+                                
+                                // Then search
                                 if (mode === 'local') {
-                                    searchMoviesLocal(null, 1, false); // Explicit fresh search
+                                    searchMoviesLocal(null, 1, false);
                                 } else {
-                                    searchMoviesOnline(null, 1, false); // Explicit fresh search
+                                    searchMoviesOnline(null, 1, false);
                                 }
                             }}>
                                 🔍 Search
                             </button>
                             
-                            {/* Clear Search button - shows when actively searching */}
-                            {searchQuery && (
-                                <button 
-                                    onClick={() => {
-                                        setSearchQuery('');
-                                        setShowSuggestions(false);
-                                        setSearchSuggestions([]);
-                                        // Don't reset filters, just clear search query
-                                        if (selectedGenre || selectedDecade || selectedLanguage || sortBy !== 'popularity' || selectedRuntime || selectedRating || minImdbRating > 0) {
-                                            // Re-search with filters but no query
-                                            if (mode === 'local') {
-                                                searchMoviesLocal('');
-                                            } else {
-                                                searchMoviesOnline('');
-                                            }
-                                        } else {
-                                            // No filters, go back to popular
-                                            resetToHome();
-                                        }
-                                    }}
-                                    style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
-                                    title="Clear search query"
-                                >
-                                    ✕ Clear Search
-                                </button>
-                            )}
-                            
-                            {/* Home button - shows when any filter/search is active */}
+                            {/* Clear Filters button - shows when any filter/search is active, always goes home */}
                             {(searchQuery || selectedGenre || selectedDecade || selectedLanguage !== '' || sortBy !== 'popularity' || selectedRuntime || selectedRating || minImdbRating > 0 || hasLocalSearchResults) && (
                                 <button 
                                     onClick={resetToHome}
-                                    style={{ background: 'var(--accent-gold)', color: '#000' }}
-                                    title="Reset all filters and return to popular movies"
+                                    style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                    title="Clear all filters and search, return to popular movies"
                                 >
-                                    🏠 Home
+                                    ✕ Clear Filters
                                 </button>
                             )}
                         </div>
