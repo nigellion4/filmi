@@ -908,6 +908,25 @@
             border-radius: 5px;
             font-size: 0.75rem;
             font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .streaming-badge:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+            filter: brightness(1.2);
+        }
+
+        .streaming-badge.clickable {
+            cursor: pointer;
+        }
+
+        .streaming-link {
+            text-decoration: none;
+            color: inherit;
         }
 
         .voting-section {
@@ -3174,6 +3193,35 @@
                     .sort((a, b) => b.score - a.score);
             };
 
+            // Generate streaming platform link
+            const getStreamingLink = (movie, provider) => {
+                // Map of provider IDs to their base URLs and search patterns
+                const providerLinks = {
+                    8: { name: 'Netflix', url: 'https://www.netflix.com/search?q=' }, // Netflix
+                    9: { name: 'Amazon Prime', url: 'https://www.amazon.com/s?k=' }, // Amazon Prime
+                    10: { name: 'Apple TV', url: 'https://tv.apple.com/search?q=' }, // Apple TV+
+                    15: { name: 'Hulu', url: 'https://www.hulu.com/search?q=' }, // Hulu
+                    337: { name: 'Disney+', url: 'https://www.disneyplus.com/search?q=' }, // Disney+
+                    384: { name: 'HBO Max', url: 'https://www.max.com/search?q=' }, // HBO Max/Max
+                    387: { name: 'Peacock', url: 'https://www.peacocktv.com/search?q=' }, // Peacock
+                    531: { name: 'Paramount+', url: 'https://www.paramountplus.com/search/?query=' }, // Paramount+
+                    350: { name: 'Apple TV', url: 'https://tv.apple.com/search?q=' }, // Apple TV (buy/rent)
+                    2: { name: 'Apple TV', url: 'https://tv.apple.com/search?q=' }, // Apple iTunes
+                    3: { name: 'Google Play', url: 'https://play.google.com/store/search?q=' }, // Google Play
+                    192: { name: 'YouTube', url: 'https://www.youtube.com/results?search_query=' }, // YouTube
+                };
+
+                const providerInfo = providerLinks[provider.provider_id];
+                if (providerInfo) {
+                    // Use movie title for search
+                    const searchQuery = encodeURIComponent(movie.title);
+                    return providerInfo.url + searchQuery;
+                }
+
+                // Fallback: Google search for the movie + provider
+                return `https://www.google.com/search?q=${encodeURIComponent(movie.title + ' ' + provider.provider_name)}`;
+            };
+
             const getVotingBreakdown = (movieId) => {
                 // Get who voted for this movie and at what rank
                 const rankedVotes = mode === 'local' ? localRankedVotes : sessionData?.rankedVotes || {};
@@ -3842,9 +3890,18 @@
                                                     </div>
                                                     <div className="streaming-info">
                                                         {selectedMovie.streamingProviders.flatrate.map(provider => (
-                                                            <div key={provider.provider_id} className="streaming-badge">
-                                                                {provider.provider_name}
-                                                            </div>
+                                                            <a
+                                                                key={provider.provider_id}
+                                                                href={getStreamingLink(selectedMovie, provider)}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="streaming-link"
+                                                                title={`Watch on ${provider.provider_name}`}
+                                                            >
+                                                                <div className="streaming-badge clickable">
+                                                                    {provider.provider_name} →
+                                                                </div>
+                                                            </a>
                                                         ))}
                                                     </div>
                                                 </div>
@@ -3862,13 +3919,21 @@
                                                     </div>
                                                     <div className="streaming-info">
                                                         {selectedMovie.streamingProviders.rent.map(provider => (
-                                                            <div 
-                                                                key={provider.provider_id} 
-                                                                className="streaming-badge"
-                                                                style={{ background: '#ff6b6b' }}
+                                                            <a
+                                                                key={provider.provider_id}
+                                                                href={getStreamingLink(selectedMovie, provider)}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="streaming-link"
+                                                                title={`Rent/Buy on ${provider.provider_name}`}
                                                             >
-                                                                {provider.provider_name}
-                                                            </div>
+                                                                <div 
+                                                                    className="streaming-badge clickable"
+                                                                    style={{ background: '#ff6b6b' }}
+                                                                >
+                                                                    {provider.provider_name} →
+                                                                </div>
+                                                            </a>
                                                         ))}
                                                     </div>
                                                 </div>
@@ -3893,13 +3958,21 @@
                                                                 !selectedMovie.streamingProviders.rent?.some(r => r.provider_id === buyProvider.provider_id)
                                                             )
                                                             .map(provider => (
-                                                                <div 
-                                                                    key={provider.provider_id} 
-                                                                    className="streaming-badge"
-                                                                    style={{ background: '#ffa500' }}
+                                                                <a
+                                                                    key={provider.provider_id}
+                                                                    href={getStreamingLink(selectedMovie, provider)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="streaming-link"
+                                                                    title={`Buy on ${provider.provider_name}`}
                                                                 >
-                                                                    {provider.provider_name}
-                                                                </div>
+                                                                    <div 
+                                                                        className="streaming-badge clickable"
+                                                                        style={{ background: '#ffa500' }}
+                                                                    >
+                                                                        {provider.provider_name} →
+                                                                    </div>
+                                                                </a>
                                                             ))
                                                         }
                                                     </div>
@@ -4866,13 +4939,22 @@
                                                         </div>
                                                         <div className="streaming-info" style={{ justifyContent: 'center' }}>
                                                             {winner.streamingProviders.flatrate.map(provider => (
-                                                                <div 
+                                                                <a
                                                                     key={provider.provider_id}
-                                                                    className="streaming-badge"
-                                                                    style={{ fontSize: '0.9rem', padding: '6px 14px' }}
+                                                                    href={getStreamingLink(winner, provider)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="streaming-link"
+                                                                    title={`Watch on ${provider.provider_name}`}
+                                                                    onClick={(e) => e.stopPropagation()}
                                                                 >
-                                                                    {provider.provider_name}
-                                                                </div>
+                                                                    <div 
+                                                                        className="streaming-badge clickable"
+                                                                        style={{ fontSize: '0.9rem', padding: '6px 14px' }}
+                                                                    >
+                                                                        {provider.provider_name} →
+                                                                    </div>
+                                                                </a>
                                                             ))}
                                                         </div>
                                                     </div>
@@ -4890,17 +4972,26 @@
                                                         </div>
                                                         <div className="streaming-info" style={{ justifyContent: 'center' }}>
                                                             {winner.streamingProviders.rent.map(provider => (
-                                                                <div 
+                                                                <a
                                                                     key={provider.provider_id}
-                                                                    className="streaming-badge"
-                                                                    style={{ 
-                                                                        background: 'var(--accent-gold)',
-                                                                        fontSize: '0.9rem',
-                                                                        padding: '6px 14px'
-                                                                    }}
+                                                                    href={getStreamingLink(winner, provider)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="streaming-link"
+                                                                    title={`Rent/Buy on ${provider.provider_name}`}
+                                                                    onClick={(e) => e.stopPropagation()}
                                                                 >
-                                                                    {provider.provider_name}
-                                                                </div>
+                                                                    <div 
+                                                                        className="streaming-badge clickable"
+                                                                        style={{ 
+                                                                            background: 'var(--accent-gold)',
+                                                                            fontSize: '0.9rem',
+                                                                            padding: '6px 14px'
+                                                                        }}
+                                                                    >
+                                                                        {provider.provider_name} →
+                                                                    </div>
+                                                                </a>
                                                             ))}
                                                         </div>
                                                     </div>
