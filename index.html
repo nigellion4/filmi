@@ -2223,6 +2223,21 @@
                 }
             }, []);
 
+            // Check for join URL parameter (QR code scans)
+            useEffect(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const joinRoomCode = urlParams.get('join');
+                if (joinRoomCode) {
+                    // Auto-fill join code and switch to online mode
+                    setJoinCode(joinRoomCode.toUpperCase());
+                    setScreen('lobby');
+                    setMode('online');
+                    
+                    // Clear URL parameter
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }, []);
+
             const fetchMovieDetails = async (movieId) => {
                 try {
                     // Fetch movie details including videos
@@ -3592,6 +3607,24 @@
                                     <div className="divider">
                                         <span>OR</span>
                                     </div>
+
+                                    <h3 style={{ 
+                                        color: 'var(--accent-gold)', 
+                                        marginBottom: '15px',
+                                        fontSize: '1.3rem',
+                                        fontFamily: "'Bebas Neue', sans-serif"
+                                    }}>
+                                        Join Existing Session
+                                    </h3>
+                                    
+                                    <p style={{ 
+                                        color: '#bbb', 
+                                        marginBottom: '20px',
+                                        fontSize: '0.95rem',
+                                        lineHeight: '1.5'
+                                    }}>
+                                        Have someone show you their <strong style={{ color: 'var(--accent-gold)' }}>QR code</strong> and scan it with your phone camera, or enter the <strong style={{ color: 'var(--accent-gold)' }}>room code</strong> below:
+                                    </p>
 
                                     <div className="input-group">
                                         <label>Room Code</label>
