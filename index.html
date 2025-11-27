@@ -1640,6 +1640,148 @@
             color: #000;
         }
 
+        /* Login Modal Styles */
+        .login-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+        }
+
+        .login-modal {
+            background: var(--bg-primary);
+            border: 3px solid var(--accent-gold);
+            border-radius: 15px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 0 40px var(--glow);
+            position: relative;
+        }
+
+        .login-modal-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-modal-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem;
+            color: var(--accent-gold);
+            margin-bottom: 10px;
+            letter-spacing: 0.1em;
+        }
+
+        .login-modal-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .login-form-group {
+            margin-bottom: 20px;
+        }
+
+        .login-form-label {
+            display: block;
+            color: var(--accent-gold);
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .login-form-label.optional {
+            color: var(--text-secondary);
+        }
+
+        .login-form-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--accent-gold);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .login-form-input:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 10px rgba(218, 165, 32, 0.3);
+        }
+
+        .login-form-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .login-form-submit {
+            flex: 1;
+            padding: 14px;
+            background: var(--accent-gold);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .login-form-submit:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(218, 165, 32, 0.4);
+        }
+
+        .login-form-cancel {
+            flex: 1;
+            padding: 14px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--text-secondary);
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .login-form-cancel:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-primary);
+            color: var(--text-primary);
+        }
+
+        .login-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .login-modal-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
         @media (max-width: 768px) {
             .profile-bar {
                 padding: 12px 15px;
@@ -1803,10 +1945,12 @@
             const [isScrolled, setIsScrolled] = useState(false);
             
             // User Profile & Watchlist System
-            const [userProfile, setUserProfile] = useState(null); // { username, watchlist: { movieId: 'seen'/'want' }, photo: base64 }
+            const [userProfile, setUserProfile] = useState(null); // { username, email, password, watchlist: { movieId: 'seen'/'want' }, photo: base64 }
             const [showProfileMenu, setShowProfileMenu] = useState(false);
             const [watchlistFilter, setWatchlistFilter] = useState(null); // 'seen', 'want', or null
             const [profileLoginInput, setProfileLoginInput] = useState('');
+            const [showLoginModal, setShowLoginModal] = useState(false);
+            const [loginForm, setLoginForm] = useState({ name: '', email: '', password: '' });
             const [roomCode, setRoomCode] = useState('');
             const [userName, setUserName] = useState('');
             const [joinCode, setJoinCode] = useState('');
@@ -1886,6 +2030,17 @@
 
                 window.addEventListener('scroll', handleScroll);
                 return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
+
+            // Load saved profile on mount (persist login across reloads)
+            useEffect(() => {
+                const savedUsername = localStorage.getItem('filmi_current_user');
+                if (savedUsername) {
+                    const profile = loadUserProfile(savedUsername);
+                    if (profile) {
+                        setUserProfile(profile);
+                    }
+                }
             }, []);
 
             const fetchMovieDetails = async (movieId) => {
@@ -2072,13 +2227,14 @@
             // User Profile & Watchlist Functions
             const loadUserProfile = (username) => {
                 const profiles = JSON.parse(localStorage.getItem('filmi_profiles') || '{}');
-                return profiles[username] || { username, watchlist: {}, photo: null };
+                return profiles[username] || { username, email: '', password: '', watchlist: {}, photo: null };
             };
 
             const saveUserProfile = (profile) => {
                 const profiles = JSON.parse(localStorage.getItem('filmi_profiles') || '{}');
                 profiles[profile.username] = profile;
                 localStorage.setItem('filmi_profiles', JSON.stringify(profiles));
+                localStorage.setItem('filmi_current_user', profile.username); // Save current user for persistence
                 setUserProfile(profile);
             };
 
@@ -2090,8 +2246,33 @@
                 setProfileLoginInput('');
             };
 
+            const loginWithForm = () => {
+                if (!loginForm.name.trim()) {
+                    alert('Please enter your name');
+                    return;
+                }
+                if (!loginForm.email.trim()) {
+                    alert('Please enter your email');
+                    return;
+                }
+                
+                const profile = loadUserProfile(loginForm.name.trim());
+                const updatedProfile = {
+                    ...profile,
+                    username: loginForm.name.trim(),
+                    email: loginForm.email.trim(),
+                    password: loginForm.password || profile.password || '' // Optional password
+                };
+                
+                setUserProfile(updatedProfile);
+                saveUserProfile(updatedProfile);
+                setShowLoginModal(false);
+                setLoginForm({ name: '', email: '', password: '' });
+            };
+
             const logoutProfile = () => {
                 setUserProfile(null);
+                localStorage.removeItem('filmi_current_user'); // Clear saved login
                 setShowProfileMenu(false);
                 setScreen('lobby');
             };
@@ -2856,20 +3037,18 @@
                         <div className={`profile-bar ${isScrolled ? 'compact' : ''} ${selectedMovie ? 'hidden' : ''}`}>
                             {!userProfile ? (
                                 <div className="profile-login">
-                                    <input
-                                        type="text"
-                                        placeholder="Enter your name to login"
-                                        value={profileLoginInput}
-                                        onChange={(e) => setProfileLoginInput(e.target.value)}
-                                        onKeyPress={(e) => {
-                                            if (e.key === 'Enter') loginProfile(profileLoginInput);
-                                        }}
-                                    />
                                     <button 
                                         className="profile-btn"
-                                        onClick={() => loginProfile(profileLoginInput)}
+                                        onClick={() => setShowLoginModal(true)}
+                                        style={{ 
+                                            padding: '12px 30px',
+                                            fontSize: '1rem',
+                                            background: 'var(--accent-gold)',
+                                            color: '#000',
+                                            border: 'none'
+                                        }}
                                     >
-                                        Login
+                                        👤 Login / Sign Up
                                     </button>
                                 </div>
                             ) : (
@@ -2911,7 +3090,7 @@
                             </div>
                         </div>
 
-                        <div className="app-container" style={{ paddingTop: isScrolled ? '70px' : '100px', transition: 'padding-top 0.3s ease' }}>
+                        <div className="app-container" style={{ paddingTop: isScrolled ? '90px' : '140px', transition: 'padding-top 0.3s ease' }}>
                         <div className="header">
                             <div className="marquee-lights">
                                 <div className="light"></div>
@@ -3210,20 +3389,18 @@
                     <div className={`profile-bar ${isScrolled ? 'compact' : ''} ${selectedMovie ? 'hidden' : ''}`}>
                         {!userProfile ? (
                             <div className="profile-login">
-                                <input
-                                    type="text"
-                                    placeholder="Enter your name to login"
-                                    value={profileLoginInput}
-                                    onChange={(e) => setProfileLoginInput(e.target.value)}
-                                    onKeyPress={(e) => {
-                                        if (e.key === 'Enter') loginProfile(profileLoginInput);
-                                    }}
-                                />
                                 <button 
                                     className="profile-btn"
-                                    onClick={() => loginProfile(profileLoginInput)}
+                                    onClick={() => setShowLoginModal(true)}
+                                    style={{ 
+                                        padding: '12px 30px',
+                                        fontSize: '1rem',
+                                        background: 'var(--accent-gold)',
+                                        color: '#000',
+                                        border: 'none'
+                                    }}
                                 >
-                                    Login
+                                    👤 Login / Sign Up
                                 </button>
                             </div>
                         ) : (
@@ -3626,7 +3803,7 @@
                         </div>
                     </div>
 
-                    <div style={{ paddingTop: isScrolled ? '70px' : '100px', transition: 'padding-top 0.3s ease' }}>
+                    <div style={{ paddingTop: isScrolled ? '90px' : '140px', transition: 'padding-top 0.3s ease' }}>
                     {/* Phase Banner */}
                     {(() => {
                         const currentPhase = mode === 'local' ? localVotingPhase : sessionData?.votingPhase;
@@ -4452,6 +4629,85 @@
                 </>
             );
         }
+
+        {/* Login Modal */}
+        {showLoginModal && (
+            <div className="login-modal-overlay" onClick={() => setShowLoginModal(false)}>
+                <div className="login-modal" onClick={(e) => e.stopPropagation()}>
+                    <button 
+                        className="login-modal-close"
+                        onClick={() => setShowLoginModal(false)}
+                        title="Close"
+                    >
+                        ×
+                    </button>
+                    
+                    <div className="login-modal-header">
+                        <h2 className="login-modal-title">Welcome to FILMI</h2>
+                        <p className="login-modal-subtitle">Create your profile to get started</p>
+                    </div>
+
+                    <div className="login-form-group">
+                        <label className="login-form-label">Name *</label>
+                        <input
+                            type="text"
+                            className="login-form-input"
+                            placeholder="Enter your name"
+                            value={loginForm.name}
+                            onChange={(e) => setLoginForm({ ...loginForm, name: e.target.value })}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter') loginWithForm();
+                            }}
+                        />
+                    </div>
+
+                    <div className="login-form-group">
+                        <label className="login-form-label">Email *</label>
+                        <input
+                            type="email"
+                            className="login-form-input"
+                            placeholder="Enter your email"
+                            value={loginForm.email}
+                            onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter') loginWithForm();
+                            }}
+                        />
+                    </div>
+
+                    <div className="login-form-group">
+                        <label className="login-form-label optional">Password (Optional)</label>
+                        <input
+                            type="password"
+                            className="login-form-input"
+                            placeholder="Create a password (optional)"
+                            value={loginForm.password}
+                            onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter') loginWithForm();
+                            }}
+                        />
+                    </div>
+
+                    <div className="login-form-buttons">
+                        <button 
+                            className="login-form-cancel"
+                            onClick={() => setShowLoginModal(false)}
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            className="login-form-submit"
+                            onClick={loginWithForm}
+                        >
+                            Get Started
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+    </>;
+}
 
         ReactDOM.render(<App />, document.getElementById('root'));
 
