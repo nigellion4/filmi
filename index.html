@@ -1401,6 +1401,12 @@
             transition: all 0.3s ease;
         }
 
+        .profile-bar.hidden {
+            transform: translateY(-100%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .profile-bar.compact {
             padding: 8px 20px;
             min-height: 50px;
@@ -2847,7 +2853,7 @@
                 return (
                     <>
                         {/* Profile Bar */}
-                        <div className={`profile-bar ${isScrolled ? 'compact' : ''}`}>
+                        <div className={`profile-bar ${isScrolled ? 'compact' : ''} ${selectedMovie ? 'hidden' : ''}`}>
                             {!userProfile ? (
                                 <div className="profile-login">
                                     <input
@@ -3012,7 +3018,7 @@
                 return (
                     <>
                         {/* Profile Bar */}
-                        <div className={`profile-bar ${isScrolled ? 'compact' : ''}`}>
+                        <div className={`profile-bar ${isScrolled ? 'compact' : ''} ${selectedMovie ? 'hidden' : ''}`}>
                             <div className="profile-header">
                                 {userProfile.photo ? (
                                     <img
@@ -3201,7 +3207,7 @@
             return (
                 <>
                     {/* Profile Bar */}
-                    <div className={`profile-bar ${isScrolled ? 'compact' : ''}`}>
+                    <div className={`profile-bar ${isScrolled ? 'compact' : ''} ${selectedMovie ? 'hidden' : ''}`}>
                         {!userProfile ? (
                             <div className="profile-login">
                                 <input
