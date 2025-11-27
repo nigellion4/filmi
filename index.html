@@ -3022,6 +3022,42 @@
                 await database.ref(`sessions/${roomCode}/votingPhase`).set(VOTING_PHASES.FINAL_VOTE);
             };
 
+            const removeParticipant = async (participantName) => {
+                if (!firebaseInitialized || !roomCode) return;
+                if (userName !== sessionData?.host) {
+                    alert('Only the host can remove participants!');
+                    return;
+                }
+                
+                if (participantName === sessionData?.host) {
+                    alert('Cannot remove the host!');
+                    return;
+                }
+                
+                if (window.confirm(`Remove ${participantName} from the session?`)) {
+                    // Remove from users
+                    await database.ref(`sessions/${roomCode}/users/${participantName}`).remove();
+                    
+                    // Remove their favorites
+                    const favoritesRef = database.ref(`sessions/${roomCode}/favorites`);
+                    const favoritesSnapshot = await favoritesRef.once('value');
+                    const favorites = favoritesSnapshot.val() || {};
+                    
+                    for (const movieId in favorites) {
+                        if (favorites[movieId][participantName]) {
+                            await database.ref(`sessions/${roomCode}/favorites/${movieId}/${participantName}`).remove();
+                        }
+                    }
+                    
+                    // Remove their submissions
+                    await database.ref(`sessions/${roomCode}/favoritesSubmitted/${participantName}`).remove();
+                    await database.ref(`sessions/${roomCode}/rankedSubmitted/${participantName}`).remove();
+                    
+                    // Remove their votes
+                    await database.ref(`sessions/${roomCode}/rankedVotes/${participantName}`).remove();
+                }
+            };
+
             const handleRankedVoteOnline = async (rank, movieId) => {
                 if (!firebaseInitialized) return;
                 // rank is 'first', 'second', or 'third'
@@ -4453,6 +4489,60 @@
                                                 )}
                                             </div>
                                             
+                                            {/* Show participants list for host */}
+                                            {isHost && sessionData?.users && (
+                                                <div style={{ 
+                                                    marginTop: '15px', 
+                                                    padding: '15px', 
+                                                    background: 'rgba(218, 165, 32, 0.1)', 
+                                                    border: '1px solid var(--accent-gold)',
+                                                    borderRadius: '8px' 
+                                                }}>
+                                                    <h4 style={{ 
+                                                        color: 'var(--accent-gold)', 
+                                                        marginBottom: '10px',
+                                                        fontSize: '1rem',
+                                                        fontFamily: "'Bebas Neue', sans-serif"
+                                                    }}>
+                                                        PARTICIPANTS
+                                                    </h4>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {Object.keys(sessionData.users).map(user => (
+                                                            <div key={user} style={{ 
+                                                                display: 'flex', 
+                                                                justifyContent: 'space-between', 
+                                                                alignItems: 'center',
+                                                                padding: '8px',
+                                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                                borderRadius: '4px'
+                                                            }}>
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    {user === sessionData.host && '👑 '}
+                                                                    {user}
+                                                                    {sessionData?.favoritesSubmitted?.[user] && ' ✅'}
+                                                                </span>
+                                                                {user !== sessionData.host && user !== userName && (
+                                                                    <button
+                                                                        onClick={() => removeParticipant(user)}
+                                                                        style={{
+                                                                            padding: '4px 12px',
+                                                                            background: 'var(--accent-red)',
+                                                                            border: 'none',
+                                                                            borderRadius: '4px',
+                                                                            color: 'white',
+                                                                            cursor: 'pointer',
+                                                                            fontSize: '0.85rem'
+                                                                        }}
+                                                                    >
+                                                                        Remove
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
                                             <div className="host-controls">
                                                 {!hasUserSubmitted('favorites', userName) ? (
                                                     <button 
@@ -4466,6 +4556,17 @@
                                                     <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
                                                         ✅ Votes Submitted!
                                                     </div>
+                                                )}
+                                                
+                                                {/* Host can force advance even if not everyone submitted */}
+                                                {isHost && getSubmittedCount('favorites') > 0 && (
+                                                    <button 
+                                                        onClick={proceedToFinalVoteOnline}
+                                                        className="btn-secondary"
+                                                        style={{ background: 'var(--accent-gold)', color: '#000', fontWeight: 'bold' }}
+                                                    >
+                                                        Proceed to Final Vote →
+                                                    </button>
                                                 )}
                                             </div>
                                             
@@ -4793,6 +4894,44 @@
                                                 ) : null}
                                             </div>
                                             
+                                            {/* Show participants list for host */}
+                                            {isHost && sessionData?.users && (
+                                                <div style={{ 
+                                                    marginTop: '15px', 
+                                                    padding: '15px', 
+                                                    background: 'rgba(218, 165, 32, 0.1)', 
+                                                    border: '1px solid var(--accent-gold)',
+                                                    borderRadius: '8px' 
+                                                }}>
+                                                    <h4 style={{ 
+                                                        color: 'var(--accent-gold)', 
+                                                        marginBottom: '10px',
+                                                        fontSize: '1rem',
+                                                        fontFamily: "'Bebas Neue', sans-serif"
+                                                    }}>
+                                                        VOTING STATUS
+                                                    </h4>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {Object.keys(sessionData.users).map(user => (
+                                                            <div key={user} style={{ 
+                                                                display: 'flex', 
+                                                                justifyContent: 'space-between', 
+                                                                alignItems: 'center',
+                                                                padding: '8px',
+                                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                                borderRadius: '4px'
+                                                            }}>
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    {user === sessionData.host && '👑 '}
+                                                                    {user}
+                                                                    {sessionData?.rankedSubmitted?.[user] && ' ✅'}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
                                             <div className="host-controls">
                                                 {!hasUserSubmitted('ranked', userName) ? (
                                                     <button 
@@ -4806,6 +4945,16 @@
                                                     <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
                                                         ✅ Rankings Submitted!
                                                     </div>
+                                                )}
+                                                
+                                                {/* Host can force announce winner even if not everyone submitted */}
+                                                {isHost && getSubmittedCount('ranked') > 0 && (
+                                                    <button 
+                                                        onClick={announceWinnerOnline}
+                                                        style={{ background: 'var(--accent-gold)', color: '#000', fontWeight: 'bold' }}
+                                                    >
+                                                        🏆 Announce Winner
+                                                    </button>
                                                 )}
                                             </div>
                                             
