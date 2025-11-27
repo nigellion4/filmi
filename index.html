@@ -2223,6 +2223,21 @@
                 }
             }, []);
 
+            // Check for join URL parameter (QR code scans)
+            useEffect(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const joinRoomCode = urlParams.get('join');
+                if (joinRoomCode) {
+                    // Auto-fill join code and switch to online mode
+                    setJoinCode(joinRoomCode.toUpperCase());
+                    setScreen('lobby');
+                    setMode('online');
+                    
+                    // Clear URL parameter
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }, []);
+
             const fetchMovieDetails = async (movieId) => {
                 try {
                     // Fetch movie details including videos
@@ -2314,6 +2329,15 @@
                 setShowSuggestions(false);
                 setSearchSuggestions([]);
                 
+                // When selecting a suggestion, clear filters (search overrides filters)
+                setSelectedGenre('');
+                setSelectedDecade('');
+                setSelectedLanguage('');
+                setSortBy('popularity');
+                setSelectedRuntime('');
+                setSelectedRating('');
+                setMinImdbRating(0);
+                
                 if (suggestion.type === 'actor') {
                     // Search for movies with this actor
                     setSearchQuery(suggestion.title);
@@ -2324,12 +2348,12 @@
                         await searchByActorOnline(suggestion.id);
                     }
                 } else {
-                    // Regular movie search
+                    // Regular movie search - explicitly start fresh
                     setSearchQuery(suggestion.title);
                     if (mode === 'local') {
-                        searchMoviesLocal(suggestion.title);
+                        searchMoviesLocal(suggestion.title, 1, false); // Explicitly page 1, no append
                     } else {
-                        searchMoviesOnline(suggestion.title);
+                        searchMoviesOnline(suggestion.title, 1, false); // Explicitly page 1, no append
                     }
                 }
             };
@@ -2355,6 +2379,7 @@
                     setMovies(moviesWithProviders);
                     setCurrentPage(1);
                     setHasMorePages(data.total_pages > 1);
+                    setHasLocalSearchResults(true); // Mark as search result
                 } catch (error) {
                     console.error('Error searching by actor:', error);
                 }
@@ -3088,6 +3113,39 @@
                 await database.ref(`sessions/${roomCode}/votingPhase`).set(VOTING_PHASES.WINNER);
             };
 
+            const resetSessionLocal = () => {
+                if (window.confirm('Reset session? This will clear all votes and start fresh voting with the same participants.')) {
+                    // Keep users, clear votes and reset phase
+                    setLocalFavorites({});
+                    setLocalRankedVotes({});
+                    setLocalFavoritesSubmitted([]);
+                    setLocalRankedSubmitted([]);
+                    setLocalVotingPhase(VOTING_PHASES.BROWSING);
+                    setCurrentVoterIndex(0);
+                    alert('Session reset! Starting fresh with Phase 1.');
+                }
+            };
+
+            const resetSessionOnline = async () => {
+                if (!firebaseInitialized) return;
+                if (userName !== sessionData?.host) {
+                    alert('Only the host can reset the session!');
+                    return;
+                }
+                
+                if (window.confirm('Reset session? This will clear all votes and start fresh voting with the same participants.')) {
+                    // Keep users and movies, clear votes and reset phase
+                    await database.ref(`sessions/${roomCode}/favorites`).set({});
+                    await database.ref(`sessions/${roomCode}/rankedVotes`).set({});
+                    await database.ref(`sessions/${roomCode}/favoritesSubmitted`).set({});
+                    await database.ref(`sessions/${roomCode}/rankedSubmitted`).set({});
+                    await database.ref(`sessions/${roomCode}/winner`).remove();
+                    await database.ref(`sessions/${roomCode}/votingPhase`).set(VOTING_PHASES.BROWSING);
+                    
+                    alert('Session reset! Starting fresh with Phase 1.');
+                }
+            };
+
             const toggleLargeGroupMode = async () => {
                 if (mode === 'local') {
                     setLargeGroupMode(!largeGroupMode);
@@ -3157,6 +3215,24 @@
                         ? sessionData?.favoritesSubmitted || {}
                         : sessionData?.rankedSubmitted || {};
                     return !!submitted[user || userName];
+                }
+            };
+
+            const changeVoteLocal = (phase, userName) => {
+                if (phase === 'favorites') {
+                    setLocalFavoritesSubmitted(prev => prev.filter(u => u !== userName));
+                } else {
+                    setLocalRankedSubmitted(prev => prev.filter(u => u !== userName));
+                }
+            };
+
+            const changeVoteOnline = async (phase) => {
+                if (!firebaseInitialized) return;
+                
+                if (phase === 'favorites') {
+                    await database.ref(`sessions/${roomCode}/favoritesSubmitted/${userName}`).remove();
+                } else {
+                    await database.ref(`sessions/${roomCode}/rankedSubmitted/${userName}`).remove();
                 }
             };
 
@@ -3582,6 +3658,24 @@
                                     <div className="divider">
                                         <span>OR</span>
                                     </div>
+
+                                    <h3 style={{ 
+                                        color: 'var(--accent-gold)', 
+                                        marginBottom: '15px',
+                                        fontSize: '1.3rem',
+                                        fontFamily: "'Bebas Neue', sans-serif"
+                                    }}>
+                                        Join Existing Session
+                                    </h3>
+                                    
+                                    <p style={{ 
+                                        color: '#bbb', 
+                                        marginBottom: '20px',
+                                        fontSize: '0.95rem',
+                                        lineHeight: '1.5'
+                                    }}>
+                                        Have someone show you their <strong style={{ color: 'var(--accent-gold)' }}>QR code</strong> and scan it with your phone camera, or enter the <strong style={{ color: 'var(--accent-gold)' }}>room code</strong> below:
+                                    </p>
 
                                     <div className="input-group">
                                         <label>Room Code</label>
@@ -4282,45 +4376,37 @@
                                 <option value="9">9+ Stars</option>
                             </select>
                             
-                            <button onClick={mode === 'local' ? searchMoviesLocal : searchMoviesOnline}>
+                            <button onClick={() => {
+                                // When searching by text, clear all filters first (search overrides filters)
+                                if (searchQuery.trim()) {
+                                    // Clear filters
+                                    setSelectedGenre('');
+                                    setSelectedDecade('');
+                                    setSelectedLanguage('');
+                                    setSortBy('popularity');
+                                    setSelectedRuntime('');
+                                    setSelectedRating('');
+                                    setMinImdbRating(0);
+                                }
+                                
+                                // Then search
+                                if (mode === 'local') {
+                                    searchMoviesLocal(null, 1, false);
+                                } else {
+                                    searchMoviesOnline(null, 1, false);
+                                }
+                            }}>
                                 🔍 Search
                             </button>
                             
-                            {/* Clear Search button - shows when actively searching */}
-                            {searchQuery && (
-                                <button 
-                                    onClick={() => {
-                                        setSearchQuery('');
-                                        setShowSuggestions(false);
-                                        setSearchSuggestions([]);
-                                        // Don't reset filters, just clear search query
-                                        if (selectedGenre || selectedDecade || selectedLanguage || sortBy !== 'popularity' || selectedRuntime || selectedRating || minImdbRating > 0) {
-                                            // Re-search with filters but no query
-                                            if (mode === 'local') {
-                                                searchMoviesLocal('');
-                                            } else {
-                                                searchMoviesOnline('');
-                                            }
-                                        } else {
-                                            // No filters, go back to popular
-                                            resetToHome();
-                                        }
-                                    }}
-                                    style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
-                                    title="Clear search query"
-                                >
-                                    ✕ Clear Search
-                                </button>
-                            )}
-                            
-                            {/* Home button - shows when any filter/search is active */}
+                            {/* Clear Filters button - shows when any filter/search is active, always goes home */}
                             {(searchQuery || selectedGenre || selectedDecade || selectedLanguage !== '' || sortBy !== 'popularity' || selectedRuntime || selectedRating || minImdbRating > 0 || hasLocalSearchResults) && (
                                 <button 
                                     onClick={resetToHome}
-                                    style={{ background: 'var(--accent-gold)', color: '#000' }}
-                                    title="Reset all filters and return to popular movies"
+                                    style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                    title="Clear all filters and search, return to popular movies"
                                 >
-                                    🏠 Home
+                                    ✕ Clear Filters
                                 </button>
                             )}
                         </div>
@@ -4444,9 +4530,18 @@
                                                         ✅ Submit My Votes
                                                     </button>
                                                 ) : (
-                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
-                                                        ✅ Votes Submitted!
-                                                    </div>
+                                                    <>
+                                                        <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                            ✅ Votes Submitted!
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => changeVoteLocal('favorites', currentUser)}
+                                                            className="btn-secondary"
+                                                            style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                                        >
+                                                            🔄 Change Vote
+                                                        </button>
+                                                    </>
                                                 )}
                                                 
                                                 {currentVoterIndex > 0 && (
@@ -4554,9 +4649,18 @@
                                                         ✅ Submit My Votes
                                                     </button>
                                                 ) : (
-                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
-                                                        ✅ Votes Submitted!
-                                                    </div>
+                                                    <>
+                                                        <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                            ✅ Votes Submitted!
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => changeVoteOnline('favorites')}
+                                                            className="btn-secondary"
+                                                            style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                                        >
+                                                            🔄 Change Vote
+                                                        </button>
+                                                    </>
                                                 )}
                                                 
                                                 {/* Host can force advance even if not everyone submitted */}
@@ -4830,9 +4934,18 @@
                                                         ✅ Submit My Rankings
                                                     </button>
                                                 ) : (
-                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
-                                                        ✅ Rankings Submitted!
-                                                    </div>
+                                                    <>
+                                                        <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                            ✅ Rankings Submitted!
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => changeVoteLocal('ranked', currentUser)}
+                                                            className="btn-secondary"
+                                                            style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                                        >
+                                                            🔄 Change Vote
+                                                        </button>
+                                                    </>
                                                 )}
                                                 
                                                 {currentVoterIndex > 0 && (
@@ -4943,9 +5056,18 @@
                                                         ✅ Submit My Rankings
                                                     </button>
                                                 ) : (
-                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
-                                                        ✅ Rankings Submitted!
-                                                    </div>
+                                                    <>
+                                                        <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                            ✅ Rankings Submitted!
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => changeVoteOnline('ranked')}
+                                                            className="btn-secondary"
+                                                            style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                                        >
+                                                            🔄 Change Vote
+                                                        </button>
+                                                    </>
                                                 )}
                                                 
                                                 {/* Host can force announce winner even if not everyone submitted */}
@@ -5268,11 +5390,22 @@
                                         </div>
                                     )}
                                     
-                                    {/* Share Results Button */}
+                                    {/* Share Results and Reset Session Buttons */}
                                     <div className="sharing-section" style={{ marginTop: '30px' }}>
                                         <button onClick={shareResults} className="share-btn">
                                             📤 Share Results
                                         </button>
+                                        
+                                        {/* Reset Session - Host only for online, always available for local */}
+                                        {(mode === 'local' || userName === sessionData?.host) && (
+                                            <button 
+                                                onClick={mode === 'local' ? resetSessionLocal : resetSessionOnline}
+                                                className="share-btn secondary"
+                                                style={{ background: 'var(--accent-gold)', color: '#000' }}
+                                            >
+                                                🔄 Reset Session
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             );
