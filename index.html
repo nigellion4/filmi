@@ -908,6 +908,25 @@
             border-radius: 5px;
             font-size: 0.75rem;
             font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .streaming-badge:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+            filter: brightness(1.2);
+        }
+
+        .streaming-badge.clickable {
+            cursor: pointer;
+        }
+
+        .streaming-link {
+            text-decoration: none;
+            color: inherit;
         }
 
         .voting-section {
@@ -1440,6 +1459,124 @@
         .profile-toggle-btn.hidden {
             opacity: 0;
             pointer-events: none;
+        }
+
+        /* Sharing Buttons */
+        .sharing-section {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .share-btn {
+            padding: 10px 20px;
+            background: var(--accent-gold);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .share-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(218, 165, 32, 0.4);
+        }
+
+        .share-btn.secondary {
+            background: rgba(218, 165, 32, 0.2);
+            color: var(--accent-gold);
+            border: 1px solid var(--accent-gold);
+        }
+
+        .share-btn.secondary:hover {
+            background: rgba(218, 165, 32, 0.3);
+        }
+
+        /* QR Code Modal */
+        .qr-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+        }
+
+        .qr-modal {
+            background: var(--bg-primary);
+            border: 3px solid var(--accent-gold);
+            border-radius: 15px;
+            padding: 40px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 0 40px var(--glow);
+            position: relative;
+        }
+
+        .qr-modal-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2rem;
+            color: var(--accent-gold);
+            margin-bottom: 20px;
+            letter-spacing: 0.1em;
+        }
+
+        .qr-code-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: inline-block;
+        }
+
+        .qr-code-container img {
+            display: block;
+            width: 250px;
+            height: 250px;
+        }
+
+        .qr-instructions {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 15px;
+            line-height: 1.5;
+        }
+
+        .qr-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .qr-close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
         }
 
         .profile-bar.compact {
@@ -1979,6 +2116,7 @@
             const [screen, setScreen] = useState('lobby'); // 'lobby', 'session', 'profile'
             const [isScrolled, setIsScrolled] = useState(false);
             const [isProfileBarMinimized, setIsProfileBarMinimized] = useState(false);
+            const [showQRModal, setShowQRModal] = useState(false);
             
             // User Profile & Watchlist System
             const [userProfile, setUserProfile] = useState(null); // { username, email, password, watchlist: { movieId: 'seen'/'want' }, photo: base64 }
@@ -2186,12 +2324,12 @@
                         await searchByActorOnline(suggestion.id);
                     }
                 } else {
-                    // Regular movie search
+                    // Regular movie search - explicitly start fresh
                     setSearchQuery(suggestion.title);
                     if (mode === 'local') {
-                        searchMoviesLocal(suggestion.title);
+                        searchMoviesLocal(suggestion.title, 1, false); // Explicitly page 1, no append
                     } else {
-                        searchMoviesOnline(suggestion.title);
+                        searchMoviesOnline(suggestion.title, 1, false); // Explicitly page 1, no append
                     }
                 }
             };
@@ -2217,6 +2355,7 @@
                     setMovies(moviesWithProviders);
                     setCurrentPage(1);
                     setHasMorePages(data.total_pages > 1);
+                    setHasLocalSearchResults(true); // Mark as search result
                 } catch (error) {
                     console.error('Error searching by actor:', error);
                 }
@@ -2555,10 +2694,22 @@
             };
 
             const loadMoreMovies = () => {
+                if (loading) return; // Prevent double-loading
+                
                 if (mode === 'local') {
-                    fetchPopularMoviesLocal(currentPage + 1, true);
+                    // If we have a search query or filters, load more with those
+                    if (searchQuery || selectedGenre || selectedDecade || selectedLanguage || sortBy !== 'popularity') {
+                        searchMoviesLocal(searchQuery, currentPage + 1, true);
+                    } else {
+                        fetchPopularMoviesLocal(currentPage + 1, true);
+                    }
                 } else if (mode === 'online') {
-                    fetchPopularMoviesOnline(roomCode, (sessionData?.currentPage || 1) + 1, true);
+                    // In online mode, check if host has search results
+                    if (hasLocalSearchResults) {
+                        searchMoviesOnline(searchQuery, currentPage + 1, true);
+                    } else {
+                        fetchPopularMoviesOnline(roomCode, (sessionData?.currentPage || 1) + 1, true);
+                    }
                 }
             };
 
@@ -2590,7 +2741,7 @@
                 }
             };
 
-            const searchMoviesLocal = async (customQuery = null) => {
+            const searchMoviesLocal = async (customQuery = null, page = 1, append = false) => {
                 const query = customQuery || searchQuery;
                 setShowSuggestions(false); // Hide suggestions when searching
                 
@@ -2602,7 +2753,7 @@
                 setLoading(true);
                 try {
                     // Always use discover/movie for combined filtering
-                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}`;
+                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&page=${page}`;
                     
                     // Handle sort by
                     if (sortBy === 'new_releases') {
@@ -2617,17 +2768,14 @@
                     }
                     
                     // Add query as keyword search if provided
-                    // Note: For better results with text queries, we could search first then filter,
-                    // but this approach combines all filters in one request
                     if (query.trim()) {
                         // Use search endpoint if query is provided without other filters
                         if (!selectedGenre && !selectedDecade && !selectedLanguage && sortBy === 'popularity') {
-                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=${page}`;
                         } else {
-                            // With other filters, we'll need to use discover with keyword
-                            // Note: TMDB discover doesn't support text search, so we search first, then filter results
+                            // With other filters, search then filter (pagination supported!)
                             const searchResponse = await fetch(
-                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=1`
+                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=${page}`
                             );
                             const searchData = await searchResponse.json();
                             const searchIds = (searchData.results || []).map(m => m.id);
@@ -2650,9 +2798,10 @@
                                 });
                             }
                             
-                            setMovies(moviesWithProviders);
-                            setCurrentPage(1);
-                            setHasMorePages(false); // Combined search doesn't support pagination well
+                            setMovies(append ? [...movies, ...moviesWithProviders] : moviesWithProviders);
+                            setCurrentPage(page);
+                            setHasMorePages(searchData.page < searchData.total_pages && movieList.length > 0);
+                            setHasLocalSearchResults(true);
                             setLoading(false);
                             return;
                         }
@@ -2685,16 +2834,17 @@
                         });
                     }
                     
-                    setMovies(moviesWithProviders);
-                    setCurrentPage(1);
-                    setHasMorePages(data.total_pages > 1);
+                    setMovies(append ? [...movies, ...moviesWithProviders] : moviesWithProviders);
+                    setCurrentPage(page);
+                    setHasMorePages(data.page < data.total_pages);
+                    setHasLocalSearchResults(true);
                 } catch (error) {
                     console.error('Error searching movies:', error);
                 }
                 setLoading(false);
             };
 
-            const searchMoviesOnline = async (customQuery = null) => {
+            const searchMoviesOnline = async (customQuery = null, page = 1, append = false) => {
                 // Search results are LOCAL to each user - don't sync to Firebase
                 const query = customQuery || searchQuery;
                 setShowSuggestions(false); // Hide suggestions when searching
@@ -2702,7 +2852,7 @@
                 setLoading(true);
                 try {
                     // Always use discover/movie for combined filtering
-                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}`;
+                    let url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&page=${page}`;
                     
                     // Handle sort by
                     if (sortBy === 'new_releases') {
@@ -2720,11 +2870,11 @@
                     if (query.trim()) {
                         // Use search endpoint if query is provided without other filters
                         if (!selectedGenre && !selectedDecade && !selectedLanguage && sortBy === 'popularity') {
-                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+                            url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=${page}`;
                         } else {
                             // With other filters, search first then filter results
                             const searchResponse = await fetch(
-                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=1`
+                                `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&page=${page}`
                             );
                             const searchData = await searchResponse.json();
                             const searchIds = (searchData.results || []).map(m => m.id);
@@ -2747,9 +2897,9 @@
                                 });
                             }
                             
-                            setMovies(moviesWithProviders);
-                            setCurrentPage(1);
-                            setHasMorePages(false);
+                            setMovies(append ? [...movies, ...moviesWithProviders] : moviesWithProviders);
+                            setCurrentPage(page);
+                            setHasMorePages(searchData.page < searchData.total_pages && movieList.length > 0);
                             setHasLocalSearchResults(true);
                             setLoading(false);
                             return;
@@ -2784,9 +2934,9 @@
                     }
                     
                     // Store locally, don't sync to Firebase
-                    setMovies(moviesWithProviders);
-                    setCurrentPage(1);
-                    setHasMorePages(data.total_pages > 1);
+                    setMovies(append ? [...movies, ...moviesWithProviders] : moviesWithProviders);
+                    setCurrentPage(page);
+                    setHasMorePages(data.page < data.total_pages);
                     setHasLocalSearchResults(true); // Mark as local search
                 } catch (error) {
                     console.error('Error searching movies:', error);
@@ -2871,6 +3021,42 @@
             const proceedToFinalVoteOnline = async () => {
                 if (!firebaseInitialized) return;
                 await database.ref(`sessions/${roomCode}/votingPhase`).set(VOTING_PHASES.FINAL_VOTE);
+            };
+
+            const removeParticipant = async (participantName) => {
+                if (!firebaseInitialized || !roomCode) return;
+                if (userName !== sessionData?.host) {
+                    alert('Only the host can remove participants!');
+                    return;
+                }
+                
+                if (participantName === sessionData?.host) {
+                    alert('Cannot remove the host!');
+                    return;
+                }
+                
+                if (window.confirm(`Remove ${participantName} from the session?`)) {
+                    // Remove from users
+                    await database.ref(`sessions/${roomCode}/users/${participantName}`).remove();
+                    
+                    // Remove their favorites
+                    const favoritesRef = database.ref(`sessions/${roomCode}/favorites`);
+                    const favoritesSnapshot = await favoritesRef.once('value');
+                    const favorites = favoritesSnapshot.val() || {};
+                    
+                    for (const movieId in favorites) {
+                        if (favorites[movieId][participantName]) {
+                            await database.ref(`sessions/${roomCode}/favorites/${movieId}/${participantName}`).remove();
+                        }
+                    }
+                    
+                    // Remove their submissions
+                    await database.ref(`sessions/${roomCode}/favoritesSubmitted/${participantName}`).remove();
+                    await database.ref(`sessions/${roomCode}/rankedSubmitted/${participantName}`).remove();
+                    
+                    // Remove their votes
+                    await database.ref(`sessions/${roomCode}/rankedVotes/${participantName}`).remove();
+                }
             };
 
             const handleRankedVoteOnline = async (rank, movieId) => {
@@ -3055,6 +3241,35 @@
                     .sort((a, b) => b.score - a.score);
             };
 
+            // Generate streaming platform link
+            const getStreamingLink = (movie, provider) => {
+                // Map of provider IDs to their base URLs and search patterns
+                const providerLinks = {
+                    8: { name: 'Netflix', url: 'https://www.netflix.com/search?q=' }, // Netflix
+                    9: { name: 'Amazon Prime', url: 'https://www.amazon.com/s?k=' }, // Amazon Prime
+                    10: { name: 'Apple TV', url: 'https://tv.apple.com/search?q=' }, // Apple TV+
+                    15: { name: 'Hulu', url: 'https://www.hulu.com/search?q=' }, // Hulu
+                    337: { name: 'Disney+', url: 'https://www.disneyplus.com/search?q=' }, // Disney+
+                    384: { name: 'HBO Max', url: 'https://www.max.com/search?q=' }, // HBO Max/Max
+                    387: { name: 'Peacock', url: 'https://www.peacocktv.com/search?q=' }, // Peacock
+                    531: { name: 'Paramount+', url: 'https://www.paramountplus.com/search/?query=' }, // Paramount+
+                    350: { name: 'Apple TV', url: 'https://tv.apple.com/search?q=' }, // Apple TV (buy/rent)
+                    2: { name: 'Apple TV', url: 'https://tv.apple.com/search?q=' }, // Apple iTunes
+                    3: { name: 'Google Play', url: 'https://play.google.com/store/search?q=' }, // Google Play
+                    192: { name: 'YouTube', url: 'https://www.youtube.com/results?search_query=' }, // YouTube
+                };
+
+                const providerInfo = providerLinks[provider.provider_id];
+                if (providerInfo) {
+                    // Use movie title for search
+                    const searchQuery = encodeURIComponent(movie.title);
+                    return providerInfo.url + searchQuery;
+                }
+
+                // Fallback: Google search for the movie + provider
+                return `https://www.google.com/search?q=${encodeURIComponent(movie.title + ' ' + provider.provider_name)}`;
+            };
+
             const getVotingBreakdown = (movieId) => {
                 // Get who voted for this movie and at what rank
                 const rankedVotes = mode === 'local' ? localRankedVotes : sessionData?.rankedVotes || {};
@@ -3080,6 +3295,103 @@
             const copyRoomCode = () => {
                 navigator.clipboard.writeText(roomCode);
                 alert('Room code copied to clipboard!');
+            };
+
+            // Generate shareable session link
+            const generateSessionLink = () => {
+                const baseUrl = window.location.origin + window.location.pathname;
+                return `${baseUrl}?join=${roomCode}`;
+            };
+
+            // Copy session link to clipboard
+            const copySessionLink = () => {
+                const link = generateSessionLink();
+                navigator.clipboard.writeText(link);
+                alert('Session link copied! Share it with friends to join instantly.');
+            };
+
+            // Generate QR code data URL for session
+            const generateQRCode = () => {
+                // Using a simple QR code generation approach
+                // In production, you'd use a library like qrcode.js
+                const link = generateSessionLink();
+                // For now, use a QR code API service
+                return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(link)}`;
+            };
+
+            // Export watchlist as text (basis for PDF)
+            const exportWatchlist = () => {
+                if (!userProfile || !userProfile.watchlist) {
+                    alert('No watchlist to export!');
+                    return;
+                }
+
+                const watchlistMovies = movies.filter(m => userProfile.watchlist[m.id]);
+                
+                if (watchlistMovies.length === 0) {
+                    alert('Your watchlist is empty!');
+                    return;
+                }
+
+                let exportText = `🎬 ${userProfile.username}'s Watchlist\n`;
+                exportText += `Generated: ${new Date().toLocaleDateString()}\n\n`;
+                
+                const seenMovies = watchlistMovies.filter(m => userProfile.watchlist[m.id] === 'seen');
+                const wantMovies = watchlistMovies.filter(m => userProfile.watchlist[m.id] === 'want');
+
+                if (seenMovies.length > 0) {
+                    exportText += `✓ WATCHED (${seenMovies.length}):\n`;
+                    seenMovies.forEach(m => {
+                        exportText += `  • ${m.title} (${m.release_date?.substring(0, 4) || 'N/A'})\n`;
+                    });
+                    exportText += '\n';
+                }
+
+                if (wantMovies.length > 0) {
+                    exportText += `⭐ WANT TO WATCH (${wantMovies.length}):\n`;
+                    wantMovies.forEach(m => {
+                        exportText += `  • ${m.title} (${m.release_date?.substring(0, 4) || 'N/A'})\n`;
+                    });
+                }
+
+                // Create downloadable text file
+                const blob = new Blob([exportText], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${userProfile.username}_watchlist.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                alert('Watchlist exported! Check your downloads.');
+            };
+
+            // Share session results
+            const shareResults = () => {
+                const winner = getWinner();
+                if (!winner) {
+                    alert('No winner yet!');
+                    return;
+                }
+
+                const rankedResults = getRankedResults();
+                let resultsText = `🏆 FILMI Results\n`;
+                resultsText += `Session: ${roomCode || 'Local'}\n`;
+                resultsText += `Date: ${new Date().toLocaleDateString()}\n\n`;
+                resultsText += `🎬 WINNER: ${winner.title}\n`;
+                resultsText += `Score: ${winner.score} points\n\n`;
+                
+                if (rankedResults.length > 1) {
+                    resultsText += `Top 3:\n`;
+                    rankedResults.slice(0, 3).forEach((movie, idx) => {
+                        resultsText += `${idx + 1}. ${movie.title} - ${movie.score} points\n`;
+                    });
+                }
+
+                navigator.clipboard.writeText(resultsText);
+                alert('Results copied to clipboard! Share with your group.');
             };
 
             // Advanced filtering function
@@ -3371,7 +3683,7 @@
                                         }}
                                     />
                                     
-                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
                                         <button 
                                             className="profile-btn"
                                             onClick={() => document.getElementById('photo-upload').click()}
@@ -3388,6 +3700,14 @@
                                                 Remove Photo
                                             </button>
                                         )}
+                                        
+                                        <button 
+                                            className="profile-btn"
+                                            style={{ background: 'var(--accent-gold)', color: '#000' }}
+                                            onClick={exportWatchlist}
+                                        >
+                                            📥 Export Watchlist
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -3618,9 +3938,18 @@
                                                     </div>
                                                     <div className="streaming-info">
                                                         {selectedMovie.streamingProviders.flatrate.map(provider => (
-                                                            <div key={provider.provider_id} className="streaming-badge">
-                                                                {provider.provider_name}
-                                                            </div>
+                                                            <a
+                                                                key={provider.provider_id}
+                                                                href={getStreamingLink(selectedMovie, provider)}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="streaming-link"
+                                                                title={`Watch on ${provider.provider_name}`}
+                                                            >
+                                                                <div className="streaming-badge clickable">
+                                                                    {provider.provider_name} →
+                                                                </div>
+                                                            </a>
                                                         ))}
                                                     </div>
                                                 </div>
@@ -3638,13 +3967,21 @@
                                                     </div>
                                                     <div className="streaming-info">
                                                         {selectedMovie.streamingProviders.rent.map(provider => (
-                                                            <div 
-                                                                key={provider.provider_id} 
-                                                                className="streaming-badge"
-                                                                style={{ background: '#ff6b6b' }}
+                                                            <a
+                                                                key={provider.provider_id}
+                                                                href={getStreamingLink(selectedMovie, provider)}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="streaming-link"
+                                                                title={`Rent/Buy on ${provider.provider_name}`}
                                                             >
-                                                                {provider.provider_name}
-                                                            </div>
+                                                                <div 
+                                                                    className="streaming-badge clickable"
+                                                                    style={{ background: '#ff6b6b' }}
+                                                                >
+                                                                    {provider.provider_name} →
+                                                                </div>
+                                                            </a>
                                                         ))}
                                                     </div>
                                                 </div>
@@ -3669,13 +4006,21 @@
                                                                 !selectedMovie.streamingProviders.rent?.some(r => r.provider_id === buyProvider.provider_id)
                                                             )
                                                             .map(provider => (
-                                                                <div 
-                                                                    key={provider.provider_id} 
-                                                                    className="streaming-badge"
-                                                                    style={{ background: '#ffa500' }}
+                                                                <a
+                                                                    key={provider.provider_id}
+                                                                    href={getStreamingLink(selectedMovie, provider)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="streaming-link"
+                                                                    title={`Buy on ${provider.provider_name}`}
                                                                 >
-                                                                    {provider.provider_name}
-                                                                </div>
+                                                                    <div 
+                                                                        className="streaming-badge clickable"
+                                                                        style={{ background: '#ffa500' }}
+                                                                    >
+                                                                        {provider.provider_name} →
+                                                                    </div>
+                                                                </a>
                                                             ))
                                                         }
                                                     </div>
@@ -3772,6 +4117,16 @@
                             <button onClick={copyRoomCode} className="copy-button">
                                 📋 Copy Code
                             </button>
+                            
+                            {/* Sharing Options */}
+                            <div className="sharing-section">
+                                <button onClick={() => setShowQRModal(true)} className="share-btn">
+                                    📱 Show QR Code
+                                </button>
+                                <button onClick={copySessionLink} className="share-btn secondary">
+                                    🔗 Copy Link
+                                </button>
+                            </div>
                         </div>
                     )}
 
@@ -3928,14 +4283,49 @@
                                 <option value="9">9+ Stars</option>
                             </select>
                             
-                            <button onClick={mode === 'local' ? searchMoviesLocal : searchMoviesOnline}>
+                            <button onClick={() => {
+                                if (mode === 'local') {
+                                    searchMoviesLocal(null, 1, false); // Explicit fresh search
+                                } else {
+                                    searchMoviesOnline(null, 1, false); // Explicit fresh search
+                                }
+                            }}>
                                 🔍 Search
                             </button>
+                            
+                            {/* Clear Search button - shows when actively searching */}
+                            {searchQuery && (
+                                <button 
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setShowSuggestions(false);
+                                        setSearchSuggestions([]);
+                                        // Don't reset filters, just clear search query
+                                        if (selectedGenre || selectedDecade || selectedLanguage || sortBy !== 'popularity' || selectedRuntime || selectedRating || minImdbRating > 0) {
+                                            // Re-search with filters but no query
+                                            if (mode === 'local') {
+                                                searchMoviesLocal('');
+                                            } else {
+                                                searchMoviesOnline('');
+                                            }
+                                        } else {
+                                            // No filters, go back to popular
+                                            resetToHome();
+                                        }
+                                    }}
+                                    style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                    title="Clear search query"
+                                >
+                                    ✕ Clear Search
+                                </button>
+                            )}
+                            
+                            {/* Home button - shows when any filter/search is active */}
                             {(searchQuery || selectedGenre || selectedDecade || selectedLanguage !== '' || sortBy !== 'popularity' || selectedRuntime || selectedRating || minImdbRating > 0 || hasLocalSearchResults) && (
                                 <button 
                                     onClick={resetToHome}
-                                    style={{ background: 'var(--accent-red)' }}
-                                    title="Reset to popular movies"
+                                    style={{ background: 'var(--accent-gold)', color: '#000' }}
+                                    title="Reset all filters and return to popular movies"
                                 >
                                     🏠 Home
                                 </button>
@@ -4016,6 +4406,7 @@
                         const currentPhase = mode === 'local' ? localVotingPhase : sessionData?.votingPhase;
                         const currentUser = mode === 'local' ? localUsers[0] : userName;
                         const maxFavorites = (mode === 'local' ? largeGroupMode : sessionData?.largeGroupMode) ? 1 : 3;
+                        const isHost = mode === 'local' || userName === sessionData?.host;
 
                         // Phase 1: Browsing and Favoriting
                         if (currentPhase === VOTING_PHASES.BROWSING && !loading && movies.length > 0) {
@@ -4106,6 +4497,60 @@
                                                 )}
                                             </div>
                                             
+                                            {/* Show participants list for host */}
+                                            {(mode === 'local' || userName === sessionData?.host) && sessionData?.users && (
+                                                <div style={{ 
+                                                    marginTop: '15px', 
+                                                    padding: '15px', 
+                                                    background: 'rgba(218, 165, 32, 0.1)', 
+                                                    border: '1px solid var(--accent-gold)',
+                                                    borderRadius: '8px' 
+                                                }}>
+                                                    <h4 style={{ 
+                                                        color: 'var(--accent-gold)', 
+                                                        marginBottom: '10px',
+                                                        fontSize: '1rem',
+                                                        fontFamily: "'Bebas Neue', sans-serif"
+                                                    }}>
+                                                        PARTICIPANTS
+                                                    </h4>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {Object.keys(sessionData.users).map(user => (
+                                                            <div key={user} style={{ 
+                                                                display: 'flex', 
+                                                                justifyContent: 'space-between', 
+                                                                alignItems: 'center',
+                                                                padding: '8px',
+                                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                                borderRadius: '4px'
+                                                            }}>
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    {user === sessionData.host && '👑 '}
+                                                                    {user}
+                                                                    {sessionData?.favoritesSubmitted?.[user] && ' ✅'}
+                                                                </span>
+                                                                {user !== sessionData.host && user !== userName && (
+                                                                    <button
+                                                                        onClick={() => removeParticipant(user)}
+                                                                        style={{
+                                                                            padding: '4px 12px',
+                                                                            background: 'var(--accent-red)',
+                                                                            border: 'none',
+                                                                            borderRadius: '4px',
+                                                                            color: 'white',
+                                                                            cursor: 'pointer',
+                                                                            fontSize: '0.85rem'
+                                                                        }}
+                                                                    >
+                                                                        Remove
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
                                             <div className="host-controls">
                                                 {!hasUserSubmitted('favorites', userName) ? (
                                                     <button 
@@ -4119,6 +4564,17 @@
                                                     <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
                                                         ✅ Votes Submitted!
                                                     </div>
+                                                )}
+                                                
+                                                {/* Host can force advance even if not everyone submitted */}
+                                                {(mode === 'local' || userName === sessionData?.host) && getSubmittedCount('favorites') > 0 && (
+                                                    <button 
+                                                        onClick={proceedToFinalVoteOnline}
+                                                        className="btn-secondary"
+                                                        style={{ background: 'var(--accent-gold)', color: '#000', fontWeight: 'bold' }}
+                                                    >
+                                                        Proceed to Final Vote →
+                                                    </button>
                                                 )}
                                             </div>
                                             
@@ -4446,6 +4902,44 @@
                                                 ) : null}
                                             </div>
                                             
+                                            {/* Show participants list for host */}
+                                            {(mode === 'local' || userName === sessionData?.host) && sessionData?.users && (
+                                                <div style={{ 
+                                                    marginTop: '15px', 
+                                                    padding: '15px', 
+                                                    background: 'rgba(218, 165, 32, 0.1)', 
+                                                    border: '1px solid var(--accent-gold)',
+                                                    borderRadius: '8px' 
+                                                }}>
+                                                    <h4 style={{ 
+                                                        color: 'var(--accent-gold)', 
+                                                        marginBottom: '10px',
+                                                        fontSize: '1rem',
+                                                        fontFamily: "'Bebas Neue', sans-serif"
+                                                    }}>
+                                                        VOTING STATUS
+                                                    </h4>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {Object.keys(sessionData.users).map(user => (
+                                                            <div key={user} style={{ 
+                                                                display: 'flex', 
+                                                                justifyContent: 'space-between', 
+                                                                alignItems: 'center',
+                                                                padding: '8px',
+                                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                                borderRadius: '4px'
+                                                            }}>
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    {user === sessionData.host && '👑 '}
+                                                                    {user}
+                                                                    {sessionData?.rankedSubmitted?.[user] && ' ✅'}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
                                             <div className="host-controls">
                                                 {!hasUserSubmitted('ranked', userName) ? (
                                                     <button 
@@ -4459,6 +4953,16 @@
                                                     <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
                                                         ✅ Rankings Submitted!
                                                     </div>
+                                                )}
+                                                
+                                                {/* Host can force announce winner even if not everyone submitted */}
+                                                {(mode === 'local' || userName === sessionData?.host) && getSubmittedCount('ranked') > 0 && (
+                                                    <button 
+                                                        onClick={announceWinnerOnline}
+                                                        style={{ background: 'var(--accent-gold)', color: '#000', fontWeight: 'bold' }}
+                                                    >
+                                                        🏆 Announce Winner
+                                                    </button>
                                                 )}
                                             </div>
                                             
@@ -4632,13 +5136,22 @@
                                                         </div>
                                                         <div className="streaming-info" style={{ justifyContent: 'center' }}>
                                                             {winner.streamingProviders.flatrate.map(provider => (
-                                                                <div 
+                                                                <a
                                                                     key={provider.provider_id}
-                                                                    className="streaming-badge"
-                                                                    style={{ fontSize: '0.9rem', padding: '6px 14px' }}
+                                                                    href={getStreamingLink(winner, provider)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="streaming-link"
+                                                                    title={`Watch on ${provider.provider_name}`}
+                                                                    onClick={(e) => e.stopPropagation()}
                                                                 >
-                                                                    {provider.provider_name}
-                                                                </div>
+                                                                    <div 
+                                                                        className="streaming-badge clickable"
+                                                                        style={{ fontSize: '0.9rem', padding: '6px 14px' }}
+                                                                    >
+                                                                        {provider.provider_name} →
+                                                                    </div>
+                                                                </a>
                                                             ))}
                                                         </div>
                                                     </div>
@@ -4656,17 +5169,26 @@
                                                         </div>
                                                         <div className="streaming-info" style={{ justifyContent: 'center' }}>
                                                             {winner.streamingProviders.rent.map(provider => (
-                                                                <div 
+                                                                <a
                                                                     key={provider.provider_id}
-                                                                    className="streaming-badge"
-                                                                    style={{ 
-                                                                        background: 'var(--accent-gold)',
-                                                                        fontSize: '0.9rem',
-                                                                        padding: '6px 14px'
-                                                                    }}
+                                                                    href={getStreamingLink(winner, provider)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="streaming-link"
+                                                                    title={`Rent/Buy on ${provider.provider_name}`}
+                                                                    onClick={(e) => e.stopPropagation()}
                                                                 >
-                                                                    {provider.provider_name}
-                                                                </div>
+                                                                    <div 
+                                                                        className="streaming-badge clickable"
+                                                                        style={{ 
+                                                                            background: 'var(--accent-gold)',
+                                                                            fontSize: '0.9rem',
+                                                                            padding: '6px 14px'
+                                                                        }}
+                                                                    >
+                                                                        {provider.provider_name} →
+                                                                    </div>
+                                                                </a>
                                                             ))}
                                                         </div>
                                                     </div>
@@ -4752,6 +5274,13 @@
                                             })}
                                         </div>
                                     )}
+                                    
+                                    {/* Share Results Button */}
+                                    <div className="sharing-section" style={{ marginTop: '30px' }}>
+                                        <button onClick={shareResults} className="share-btn">
+                                            📤 Share Results
+                                        </button>
+                                    </div>
                                 </div>
                             );
                         }
@@ -4766,6 +5295,48 @@
                     </div>
                     </div>
                 </div>
+                
+                {/* QR Code Modal */}
+                {showQRModal && mode === 'online' && roomCode && (
+                    <div className="qr-modal-overlay" onClick={() => setShowQRModal(false)}>
+                        <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
+                            <button 
+                                className="qr-close-btn"
+                                onClick={() => setShowQRModal(false)}
+                                title="Close"
+                            >
+                                ×
+                            </button>
+                            
+                            <h2 className="qr-modal-title">Scan to Join</h2>
+                            
+                            <div className="qr-code-container">
+                                <img 
+                                    src={generateQRCode()} 
+                                    alt="QR Code to join session"
+                                />
+                            </div>
+                            
+                            <p className="qr-instructions">
+                                Scan this QR code with your phone camera to join the session instantly!
+                            </p>
+                            
+                            <div style={{ marginTop: '20px' }}>
+                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '10px' }}>
+                                    Or share the room code:
+                                </p>
+                                <div style={{ 
+                                    fontSize: '2rem', 
+                                    fontWeight: 'bold', 
+                                    color: 'var(--accent-gold)',
+                                    letterSpacing: '0.2em'
+                                }}>
+                                    {roomCode}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 </>
             );
         }
