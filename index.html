@@ -3113,6 +3113,39 @@
                 await database.ref(`sessions/${roomCode}/votingPhase`).set(VOTING_PHASES.WINNER);
             };
 
+            const resetSessionLocal = () => {
+                if (window.confirm('Reset session? This will clear all votes and start fresh voting with the same participants.')) {
+                    // Keep users, clear votes and reset phase
+                    setLocalFavorites({});
+                    setLocalRankedVotes({});
+                    setLocalFavoritesSubmitted([]);
+                    setLocalRankedSubmitted([]);
+                    setLocalVotingPhase(VOTING_PHASES.BROWSING);
+                    setCurrentVoterIndex(0);
+                    alert('Session reset! Starting fresh with Phase 1.');
+                }
+            };
+
+            const resetSessionOnline = async () => {
+                if (!firebaseInitialized) return;
+                if (userName !== sessionData?.host) {
+                    alert('Only the host can reset the session!');
+                    return;
+                }
+                
+                if (window.confirm('Reset session? This will clear all votes and start fresh voting with the same participants.')) {
+                    // Keep users and movies, clear votes and reset phase
+                    await database.ref(`sessions/${roomCode}/favorites`).set({});
+                    await database.ref(`sessions/${roomCode}/rankedVotes`).set({});
+                    await database.ref(`sessions/${roomCode}/favoritesSubmitted`).set({});
+                    await database.ref(`sessions/${roomCode}/rankedSubmitted`).set({});
+                    await database.ref(`sessions/${roomCode}/winner`).remove();
+                    await database.ref(`sessions/${roomCode}/votingPhase`).set(VOTING_PHASES.BROWSING);
+                    
+                    alert('Session reset! Starting fresh with Phase 1.');
+                }
+            };
+
             const toggleLargeGroupMode = async () => {
                 if (mode === 'local') {
                     setLargeGroupMode(!largeGroupMode);
@@ -3182,6 +3215,24 @@
                         ? sessionData?.favoritesSubmitted || {}
                         : sessionData?.rankedSubmitted || {};
                     return !!submitted[user || userName];
+                }
+            };
+
+            const changeVoteLocal = (phase, userName) => {
+                if (phase === 'favorites') {
+                    setLocalFavoritesSubmitted(prev => prev.filter(u => u !== userName));
+                } else {
+                    setLocalRankedSubmitted(prev => prev.filter(u => u !== userName));
+                }
+            };
+
+            const changeVoteOnline = async (phase) => {
+                if (!firebaseInitialized) return;
+                
+                if (phase === 'favorites') {
+                    await database.ref(`sessions/${roomCode}/favoritesSubmitted/${userName}`).remove();
+                } else {
+                    await database.ref(`sessions/${roomCode}/rankedSubmitted/${userName}`).remove();
                 }
             };
 
@@ -4479,9 +4530,18 @@
                                                         ✅ Submit My Votes
                                                     </button>
                                                 ) : (
-                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
-                                                        ✅ Votes Submitted!
-                                                    </div>
+                                                    <>
+                                                        <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                            ✅ Votes Submitted!
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => changeVoteLocal('favorites', currentUser)}
+                                                            className="btn-secondary"
+                                                            style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                                        >
+                                                            🔄 Change Vote
+                                                        </button>
+                                                    </>
                                                 )}
                                                 
                                                 {currentVoterIndex > 0 && (
@@ -4589,9 +4649,18 @@
                                                         ✅ Submit My Votes
                                                     </button>
                                                 ) : (
-                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
-                                                        ✅ Votes Submitted!
-                                                    </div>
+                                                    <>
+                                                        <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                            ✅ Votes Submitted!
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => changeVoteOnline('favorites')}
+                                                            className="btn-secondary"
+                                                            style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                                        >
+                                                            🔄 Change Vote
+                                                        </button>
+                                                    </>
                                                 )}
                                                 
                                                 {/* Host can force advance even if not everyone submitted */}
@@ -4865,9 +4934,18 @@
                                                         ✅ Submit My Rankings
                                                     </button>
                                                 ) : (
-                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
-                                                        ✅ Rankings Submitted!
-                                                    </div>
+                                                    <>
+                                                        <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                            ✅ Rankings Submitted!
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => changeVoteLocal('ranked', currentUser)}
+                                                            className="btn-secondary"
+                                                            style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                                        >
+                                                            🔄 Change Vote
+                                                        </button>
+                                                    </>
                                                 )}
                                                 
                                                 {currentVoterIndex > 0 && (
@@ -4978,9 +5056,18 @@
                                                         ✅ Submit My Rankings
                                                     </button>
                                                 ) : (
-                                                    <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
-                                                        ✅ Rankings Submitted!
-                                                    </div>
+                                                    <>
+                                                        <div style={{ padding: '10px 20px', background: 'var(--accent-gold)', borderRadius: '8px', color: 'var(--bg-primary)' }}>
+                                                            ✅ Rankings Submitted!
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => changeVoteOnline('ranked')}
+                                                            className="btn-secondary"
+                                                            style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                                                        >
+                                                            🔄 Change Vote
+                                                        </button>
+                                                    </>
                                                 )}
                                                 
                                                 {/* Host can force announce winner even if not everyone submitted */}
@@ -5303,11 +5390,22 @@
                                         </div>
                                     )}
                                     
-                                    {/* Share Results Button */}
+                                    {/* Share Results and Reset Session Buttons */}
                                     <div className="sharing-section" style={{ marginTop: '30px' }}>
                                         <button onClick={shareResults} className="share-btn">
                                             📤 Share Results
                                         </button>
+                                        
+                                        {/* Reset Session - Host only for online, always available for local */}
+                                        {(mode === 'local' || userName === sessionData?.host) && (
+                                            <button 
+                                                onClick={mode === 'local' ? resetSessionLocal : resetSessionOnline}
+                                                className="share-btn secondary"
+                                                style={{ background: 'var(--accent-gold)', color: '#000' }}
+                                            >
+                                                🔄 Reset Session
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             );
