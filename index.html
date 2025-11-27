@@ -2720,6 +2720,10 @@
             const loadMoreMovies = () => {
                 if (loading) return; // Prevent double-loading
                 
+                // Save current position - find the last movie card
+                const movieCards = document.querySelectorAll('.movie-card');
+                const lastCard = movieCards[movieCards.length - 1];
+                
                 if (mode === 'local') {
                     // If we have a search query or filters, load more with those
                     if (searchQuery || selectedGenre || selectedDecade || selectedLanguage || sortBy !== 'popularity') {
@@ -2735,6 +2739,15 @@
                         fetchPopularMoviesOnline(roomCode, (sessionData?.currentPage || 1) + 1, true);
                     }
                 }
+                
+                // After a brief delay for content to load, scroll to where we were
+                setTimeout(() => {
+                    if (lastCard) {
+                        const yOffset = -100; // Offset to show a bit above
+                        const y = lastCard.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                        window.scrollTo({ top: y, behavior: 'smooth' });
+                    }
+                }, 500); // Wait for new movies to render
             };
 
             const resetToHome = () => {
