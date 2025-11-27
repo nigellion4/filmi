@@ -1401,6 +1401,47 @@
             transition: all 0.3s ease;
         }
 
+        .profile-bar.hidden {
+            transform: translateY(-100%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .profile-bar.minimized {
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
+
+        .profile-toggle-btn {
+            position: fixed;
+            top: 10px;
+            right: 20px;
+            z-index: 1002;
+            background: var(--accent-gold);
+            color: #000;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+
+        .profile-toggle-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(218, 165, 32, 0.4);
+        }
+
+        .profile-toggle-btn.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .profile-bar.compact {
             padding: 8px 20px;
             min-height: 50px;
@@ -1634,6 +1675,148 @@
             color: #000;
         }
 
+        /* Login Modal Styles */
+        .login-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+        }
+
+        .login-modal {
+            background: var(--bg-primary);
+            border: 3px solid var(--accent-gold);
+            border-radius: 15px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 0 40px var(--glow);
+            position: relative;
+        }
+
+        .login-modal-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-modal-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem;
+            color: var(--accent-gold);
+            margin-bottom: 10px;
+            letter-spacing: 0.1em;
+        }
+
+        .login-modal-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .login-form-group {
+            margin-bottom: 20px;
+        }
+
+        .login-form-label {
+            display: block;
+            color: var(--accent-gold);
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .login-form-label.optional {
+            color: var(--text-secondary);
+        }
+
+        .login-form-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--accent-gold);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .login-form-input:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 10px rgba(218, 165, 32, 0.3);
+        }
+
+        .login-form-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .login-form-submit {
+            flex: 1;
+            padding: 14px;
+            background: var(--accent-gold);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .login-form-submit:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(218, 165, 32, 0.4);
+        }
+
+        .login-form-cancel {
+            flex: 1;
+            padding: 14px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--text-secondary);
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .login-form-cancel:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-primary);
+            color: var(--text-primary);
+        }
+
+        .login-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .login-modal-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
         @media (max-width: 768px) {
             .profile-bar {
                 padding: 12px 15px;
@@ -1795,9 +1978,10 @@
             const [mode, setMode] = useState(''); // 'local' or 'online'
             const [screen, setScreen] = useState('lobby'); // 'lobby', 'session', 'profile'
             const [isScrolled, setIsScrolled] = useState(false);
+            const [isProfileBarMinimized, setIsProfileBarMinimized] = useState(false);
             
             // User Profile & Watchlist System
-            const [userProfile, setUserProfile] = useState(null); // { username, watchlist: { movieId: 'seen'/'want' }, photo: base64 }
+            const [userProfile, setUserProfile] = useState(null); // { username, email, password, watchlist: { movieId: 'seen'/'want' }, photo: base64 }
             const [showProfileMenu, setShowProfileMenu] = useState(false);
             const [watchlistFilter, setWatchlistFilter] = useState(null); // 'seen', 'want', or null
             const [profileLoginInput, setProfileLoginInput] = useState('');
@@ -1831,6 +2015,14 @@
             const [selectedDecade, setSelectedDecade] = useState('');
             const [selectedLanguage, setSelectedLanguage] = useState('');
             const [sortBy, setSortBy] = useState('popularity'); // 'popularity', 'new_releases', 'highest_rated'
+            
+            // Advanced filters
+            const [selectedRuntime, setSelectedRuntime] = useState(''); // '', 'short', 'medium', 'long'
+            const [selectedRating, setSelectedRating] = useState(''); // '', 'G', 'PG', 'PG-13', 'R'
+            const [selectedStreamingServices, setSelectedStreamingServices] = useState([]); // Array of service IDs
+            const [minImdbRating, setMinImdbRating] = useState(0); // 0-10
+            const [yearRange, setYearRange] = useState({ min: 1970, max: new Date().getFullYear() });
+            
             const [loading, setLoading] = useState(false);
             const [currentPage, setCurrentPage] = useState(1);
             const [hasMorePages, setHasMorePages] = useState(true);
@@ -1880,6 +2072,17 @@
 
                 window.addEventListener('scroll', handleScroll);
                 return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
+
+            // Load saved profile on mount (persist login across reloads)
+            useEffect(() => {
+                const savedUsername = localStorage.getItem('filmi_current_user');
+                if (savedUsername) {
+                    const profile = loadUserProfile(savedUsername);
+                    if (profile) {
+                        setUserProfile(profile);
+                    }
+                }
             }, []);
 
             const fetchMovieDetails = async (movieId) => {
@@ -2066,13 +2269,14 @@
             // User Profile & Watchlist Functions
             const loadUserProfile = (username) => {
                 const profiles = JSON.parse(localStorage.getItem('filmi_profiles') || '{}');
-                return profiles[username] || { username, watchlist: {}, photo: null };
+                return profiles[username] || { username, email: '', password: '', watchlist: {}, photo: null };
             };
 
             const saveUserProfile = (profile) => {
                 const profiles = JSON.parse(localStorage.getItem('filmi_profiles') || '{}');
                 profiles[profile.username] = profile;
                 localStorage.setItem('filmi_profiles', JSON.stringify(profiles));
+                localStorage.setItem('filmi_current_user', profile.username); // Save current user for persistence
                 setUserProfile(profile);
             };
 
@@ -2084,8 +2288,10 @@
                 setProfileLoginInput('');
             };
 
+
             const logoutProfile = () => {
                 setUserProfile(null);
+                localStorage.removeItem('filmi_current_user'); // Clear saved login
                 setShowProfileMenu(false);
                 setScreen('lobby');
             };
@@ -2363,6 +2569,14 @@
                 setSelectedDecade('');
                 setSelectedLanguage('');
                 setSortBy('popularity');
+                
+                // Reset advanced filters
+                setSelectedRuntime('');
+                setSelectedRating('');
+                setSelectedStreamingServices([]);
+                setMinImdbRating(0);
+                setYearRange({ min: 1970, max: new Date().getFullYear() });
+                
                 setShowSuggestions(false);
                 setSearchSuggestions([]);
                 setHasLocalSearchResults(false);
@@ -2667,6 +2881,25 @@
 
             const announceWinnerOnline = async () => {
                 if (!firebaseInitialized) return;
+                
+                // Calculate winner before announcing
+                const scores = calculateRankedScores();
+                const winnerId = Object.entries(scores)
+                    .sort((a, b) => b[1] - a[1])[0]?.[0];
+                
+                // Get winner from session movies (not local filtered list)
+                const sessionMovies = sessionData?.movies ? Object.values(sessionData.movies) : [];
+                const winnerMovie = sessionMovies.find(m => m.id === parseInt(winnerId));
+                
+                if (winnerMovie) {
+                    // Save winner data to Firebase so all users can see it
+                    await database.ref(`sessions/${roomCode}/winner`).set({
+                        ...winnerMovie,
+                        score: scores[winnerId]
+                    });
+                }
+                
+                // Set phase to winner
                 await database.ref(`sessions/${roomCode}/votingPhase`).set(VOTING_PHASES.WINNER);
             };
 
@@ -2798,6 +3031,12 @@
                 const phase = mode === 'local' ? localVotingPhase : sessionData?.votingPhase;
                 if (phase !== VOTING_PHASES.WINNER) return null;
 
+                // In online mode, use the winner saved in Firebase
+                if (mode === 'online' && sessionData?.winner) {
+                    return sessionData.winner;
+                }
+
+                // In local mode, calculate from current movies
                 const scores = calculateRankedScores();
                 const winnerId = Object.entries(scores)
                     .sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -2843,11 +3082,63 @@
                 alert('Room code copied to clipboard!');
             };
 
+            // Advanced filtering function
+            const applyAdvancedFilters = (moviesList) => {
+                return moviesList.filter(movie => {
+                    // Runtime filter
+                    if (selectedRuntime) {
+                        const runtime = movie.runtime || 0;
+                        if (selectedRuntime === 'short' && runtime >= 90) return false;
+                        if (selectedRuntime === 'medium' && (runtime < 90 || runtime >= 150)) return false;
+                        if (selectedRuntime === 'long' && runtime < 150) return false;
+                    }
+
+                    // Rating filter (content rating like PG-13, R, etc)
+                    if (selectedRating && movie.certification) {
+                        if (movie.certification !== selectedRating) return false;
+                    }
+
+                    // Streaming service filter
+                    if (selectedStreamingServices.length > 0 && movie.streamingProviders) {
+                        const movieServices = Object.keys(movie.streamingProviders);
+                        const hasSelectedService = selectedStreamingServices.some(serviceId => 
+                            movieServices.includes(serviceId)
+                        );
+                        if (!hasSelectedService) return false;
+                    }
+
+                    // IMDb rating filter
+                    if (minImdbRating > 0) {
+                        const rating = movie.vote_average || 0;
+                        if (rating < minImdbRating) return false;
+                    }
+
+                    // Year range filter
+                    if (movie.release_date) {
+                        const movieYear = parseInt(movie.release_date.substring(0, 4));
+                        if (movieYear < yearRange.min || movieYear > yearRange.max) return false;
+                    }
+
+                    return true;
+                });
+            };
+
             if (screen === 'lobby') {
                 return (
                     <>
+                        {/* Profile Toggle Button - only show when not on lobby mode selection */}
+                        {mode && (
+                            <button 
+                                className={`profile-toggle-btn ${selectedMovie ? 'hidden' : ''}`}
+                                onClick={() => setIsProfileBarMinimized(!isProfileBarMinimized)}
+                                title={isProfileBarMinimized ? 'Show Profile Bar' : 'Hide Profile Bar'}
+                            >
+                                {isProfileBarMinimized ? '👤' : '✕'}
+                            </button>
+                        )}
+
                         {/* Profile Bar */}
-                        <div className={`profile-bar ${isScrolled ? 'compact' : ''}`}>
+                        <div className={`profile-bar ${isScrolled ? 'compact' : ''} ${selectedMovie ? 'hidden' : ''} ${isProfileBarMinimized ? 'minimized' : ''}`}>
                             {!userProfile ? (
                                 <div className="profile-login">
                                     <input
@@ -2905,7 +3196,7 @@
                             </div>
                         </div>
 
-                        <div className="app-container" style={{ paddingTop: isScrolled ? '50px' : '70px', transition: 'padding-top 0.3s ease' }}>
+                        <div className="app-container" style={{ paddingTop: isScrolled ? '90px' : '140px', transition: 'padding-top 0.3s ease' }}>
                         <div className="header">
                             <div className="marquee-lights">
                                 <div className="light"></div>
@@ -3012,7 +3303,7 @@
                 return (
                     <>
                         {/* Profile Bar */}
-                        <div className={`profile-bar ${isScrolled ? 'compact' : ''}`}>
+                        <div className={`profile-bar ${isScrolled ? 'compact' : ''} ${selectedMovie ? 'hidden' : ''}`}>
                             <div className="profile-header">
                                 {userProfile.photo ? (
                                     <img
@@ -3200,8 +3491,17 @@
 
             return (
                 <>
+                    {/* Profile Toggle Button */}
+                    <button 
+                        className={`profile-toggle-btn ${selectedMovie ? 'hidden' : ''}`}
+                        onClick={() => setIsProfileBarMinimized(!isProfileBarMinimized)}
+                        title={isProfileBarMinimized ? 'Show Profile Bar' : 'Hide Profile Bar'}
+                    >
+                        {isProfileBarMinimized ? '👤' : '✕'}
+                    </button>
+
                     {/* Profile Bar */}
-                    <div className={`profile-bar ${isScrolled ? 'compact' : ''}`}>
+                    <div className={`profile-bar ${isScrolled ? 'compact' : ''} ${selectedMovie ? 'hidden' : ''} ${isProfileBarMinimized ? 'minimized' : ''}`}>
                         {!userProfile ? (
                             <div className="profile-login">
                                 <input
@@ -3605,10 +3905,33 @@
                                 <option value="new_releases">New Releases (6mo)</option>
                                 <option value="highest_rated">Highest Rated (7+)</option>
                             </select>
+                            
+                            {/* Advanced Filters Row */}
+                            <select value={selectedRuntime} onChange={(e) => setSelectedRuntime(e.target.value)}>
+                                <option value="">Any Runtime</option>
+                                <option value="short">Under 90 min</option>
+                                <option value="medium">90-150 min</option>
+                                <option value="long">Over 150 min</option>
+                            </select>
+                            <select value={selectedRating} onChange={(e) => setSelectedRating(e.target.value)}>
+                                <option value="">Any Rating</option>
+                                <option value="G">G</option>
+                                <option value="PG">PG</option>
+                                <option value="PG-13">PG-13</option>
+                                <option value="R">R</option>
+                            </select>
+                            <select value={minImdbRating} onChange={(e) => setMinImdbRating(parseFloat(e.target.value))}>
+                                <option value="0">Any IMDb Rating</option>
+                                <option value="6">6+ Stars</option>
+                                <option value="7">7+ Stars</option>
+                                <option value="8">8+ Stars</option>
+                                <option value="9">9+ Stars</option>
+                            </select>
+                            
                             <button onClick={mode === 'local' ? searchMoviesLocal : searchMoviesOnline}>
                                 🔍 Search
                             </button>
-                            {(searchQuery || selectedGenre || selectedDecade || selectedLanguage !== '' || sortBy !== 'popularity' || hasLocalSearchResults) && (
+                            {(searchQuery || selectedGenre || selectedDecade || selectedLanguage !== '' || sortBy !== 'popularity' || selectedRuntime || selectedRating || minImdbRating > 0 || hasLocalSearchResults) && (
                                 <button 
                                     onClick={resetToHome}
                                     style={{ background: 'var(--accent-red)' }}
@@ -3620,7 +3943,7 @@
                         </div>
                     </div>
 
-                    <div style={{ paddingTop: isScrolled ? '50px' : '70px', transition: 'padding-top 0.3s ease' }}>
+                    <div style={{ paddingTop: isScrolled ? '90px' : '140px', transition: 'padding-top 0.3s ease' }}>
                     {/* Phase Banner */}
                     {(() => {
                         const currentPhase = mode === 'local' ? localVotingPhase : sessionData?.votingPhase;
@@ -3808,7 +4131,7 @@
                                     )}
                                     
                                     <div className="movie-grid">
-                                    {movies.map(movie => {
+                                    {applyAdvancedFilters(movies).map(movie => {
                                         const favoriteCount = getMovieFavoriteCount(movie.id);
                                         const isFavorited = mode === 'local' 
                                             ? localFavorites[movie.id]?.[currentUser]
