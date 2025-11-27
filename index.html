@@ -4399,6 +4399,7 @@
                         const currentPhase = mode === 'local' ? localVotingPhase : sessionData?.votingPhase;
                         const currentUser = mode === 'local' ? localUsers[0] : userName;
                         const maxFavorites = (mode === 'local' ? largeGroupMode : sessionData?.largeGroupMode) ? 1 : 3;
+                        const isHost = mode === 'local' || userName === sessionData?.host;
 
                         // Phase 1: Browsing and Favoriting
                         if (currentPhase === VOTING_PHASES.BROWSING && !loading && movies.length > 0) {
@@ -4490,7 +4491,7 @@
                                             </div>
                                             
                                             {/* Show participants list for host */}
-                                            {isHost && sessionData?.users && (
+                                            {(mode === 'local' || userName === sessionData?.host) && sessionData?.users && (
                                                 <div style={{ 
                                                     marginTop: '15px', 
                                                     padding: '15px', 
@@ -4559,7 +4560,7 @@
                                                 )}
                                                 
                                                 {/* Host can force advance even if not everyone submitted */}
-                                                {isHost && getSubmittedCount('favorites') > 0 && (
+                                                {(mode === 'local' || userName === sessionData?.host) && getSubmittedCount('favorites') > 0 && (
                                                     <button 
                                                         onClick={proceedToFinalVoteOnline}
                                                         className="btn-secondary"
@@ -4895,7 +4896,7 @@
                                             </div>
                                             
                                             {/* Show participants list for host */}
-                                            {isHost && sessionData?.users && (
+                                            {(mode === 'local' || userName === sessionData?.host) && sessionData?.users && (
                                                 <div style={{ 
                                                     marginTop: '15px', 
                                                     padding: '15px', 
@@ -4948,7 +4949,7 @@
                                                 )}
                                                 
                                                 {/* Host can force announce winner even if not everyone submitted */}
-                                                {isHost && getSubmittedCount('ranked') > 0 && (
+                                                {(mode === 'local' || userName === sessionData?.host) && getSubmittedCount('ranked') > 0 && (
                                                     <button 
                                                         onClick={announceWinnerOnline}
                                                         style={{ background: 'var(--accent-gold)', color: '#000', fontWeight: 'bold' }}
